@@ -37,7 +37,7 @@
 
 ### Task 2 / Issue [P0-02]：菜单栏与全局快捷键
 
-**Files:** `PicPaste/App/MenuBarController.swift`, `PicPaste/Hotkeys/GlobalHotkeyManager.swift`, `PicPaste/Settings/AppSettings.swift`, `PicPasteTests/HotkeyStateTests.swift`。
+**Files:** `PicPaste/App/MenuBarController.swift`, `PicPaste/App/AppCoordinator.swift`, `PicPaste/Hotkeys/GlobalHotkeyManager.swift`, `PicPaste/Capture/CaptureCoordinator.swift`, `PicPaste/Settings/AppSettings.swift`, `PicPasteTests/HotkeyStateTests.swift`。
 
 **Interfaces:** `GlobalHotkeyManager` 把截图事件交给 `@MainActor CaptureCoordinator`，重复触发时按预定状态处理；注册失败不得丢失现有已生效快捷键。
 
