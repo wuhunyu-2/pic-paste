@@ -18,24 +18,6 @@ final class AppCoordinator {
         let requestID = capture.generation
         activeRequestID = requestID
 
-        // A timeout restores the UI immediately. If the system eventually
-        // supplies a late frame, the generation check rejects it.
-        deadlineTask = Task { [weak self] in
-            do {
-                try await Task.sleep(for: .seconds(10))
-            } catch {
-                return
-            }
-            guard let self, self.activeRequestID == requestID else { return }
-            self.captureTask?.cancel()
-            self.captureTask = nil
-            self.deadlineTask = nil
-            self.activeRequestID = nil
-            if self.capture.recordFailure(for: requestID) {
-                self.presentError(CaptureFailure.timedOut)
-            }
-        }
-
         captureTask = Task { [weak self] in
             guard let self else { return }
             defer {
