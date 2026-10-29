@@ -9,13 +9,17 @@ on:
 jobs:
   native:
     runs-on: xcode-27
+    env:
+      # PR checkouts use an ephemeral merge SHA; record both source and tested revisions.
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain and source revision
         run: |
           xcodebuild -version
           sw_vers
-          echo "SOURCE_SHA=$GITHUB_SHA"
+          echo "SOURCE_SHA=$SOURCE_SHA"
+          echo "CHECKOUT_SHA=$(git rev-parse HEAD)"
           uname -m
       - name: Build and test
         run: |
@@ -26,9 +30,10 @@ jobs:
           APP="$RUNNER_TEMP/PicPasteDerived/Build/Products/Release/PicPaste.app"
           test -d "$APP"
           mkdir -p dist
-          printf '%s\n' "$GITHUB_SHA" > dist/SOURCE_SHA.txt
+          printf '%s\n' "$SOURCE_SHA" > dist/SOURCE_SHA.txt
+          git rev-parse HEAD > dist/CHECKOUT_SHA.txt
           ditto -c -k --keepParent "$APP" dist/PicPaste-macOS27-arm64-unsigned.zip
-          shasum -a 256 dist/PicPaste-macOS27-arm64-unsigned.zip > dist/SHA256SUMS
+          (cd dist && shasum -a 256 PicPaste-macOS27-arm64-unsigned.zip | tee SHA256SUMS && shasum -a 256 -c SHA256SUMS)
       - uses: actions/upload-artifact@v4
         with:
           name: PicPaste-macOS27-arm64-unsigned
