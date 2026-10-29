@@ -22,7 +22,7 @@ jobs:
           xcodebuild -project PicPaste.xcodeproj -scheme PicPaste -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO test
       - name: Build unsigned development app
         run: |
-          xcodebuild -project PicPaste.xcodeproj -scheme PicPaste -configuration Release -destination 'generic/platform=macOS,arch=arm64' -derivedDataPath "$RUNNER_TEMP/PicPasteDerived" CODE_SIGNING_ALLOWED=NO build
+          xcodebuild -project PicPaste.xcodeproj -scheme PicPaste -configuration Release -destination 'platform=macOS,arch=arm64' -derivedDataPath "$RUNNER_TEMP/PicPasteDerived" CODE_SIGNING_ALLOWED=NO build
           APP="$RUNNER_TEMP/PicPasteDerived/Build/Products/Release/PicPaste.app"
           test -d "$APP"
           mkdir -p dist
