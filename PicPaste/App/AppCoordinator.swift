@@ -48,6 +48,26 @@ final class AppCoordinator {
         }
     }
 
+    private func armCaptureDeadline(for requestID: UInt64) {
+        guard activeRequestID == requestID else { return }
+        // If the OS stalls, restore idle and reject any later callback.
+        deadlineTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(10))
+            } catch {
+                return
+            }
+            guard let self, self.activeRequestID == requestID else { return }
+            self.captureTask?.cancel()
+            self.captureTask = nil
+            self.deadlineTask = nil
+            self.activeRequestID = nil
+            if self.capture.recordFailure(for: requestID) {
+                self.presentError(CaptureFailure.timedOut)
+            }
+        }
+    }
+
     func cancelCapture() {
         captureTask?.cancel()
         deadlineTask?.cancel()
