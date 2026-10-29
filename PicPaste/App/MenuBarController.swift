@@ -35,6 +35,8 @@ final class MenuBarController {
 
     @objc private func capture() { coordinator.requestCapture() }
 
+    @objc private func cancelCapture() { coordinator.cancelCapture() }
+
     @objc private func openSettings() {
         if settingsWindow == nil {
             let window = NSWindow(
