@@ -132,22 +132,10 @@ final class CarbonHotkeyBackend: HotkeyBackend {
         eventHandler = installed
     }
 
-    fileprivate func receive(_ event: EventRef) -> OSStatus {
-        var identifier = EventHotKeyID(signature: 0, id: 0)
-        let status = GetEventParameter(
-            event,
-            EventParamName(kEventParamDirectObject),
-            EventParamType(typeEventHotKeyID),
-            nil,
-            MemoryLayout<EventHotKeyID>.size,
-            nil,
-            &identifier
-        )
-        guard status == noErr, identifier.signature == Self.signature,
-              let entry = entries[identifier.id] else {
+    fileprivate func receive(token: UInt32, signature: OSType) -> OSStatus {
+        guard signature == Self.signature, let entry = entries[token] else {
             return OSStatus(eventNotHandledErr)
         }
-
         entry.action()
         return noErr
     }
@@ -158,11 +146,32 @@ private func carbonHotkeyEventCallback(
     _ event: EventRef?,
     _ userData: UnsafeMutableRawPointer?
 ) -> OSStatus {
+    // Installed on the application event target: Carbon invokes this on the
+    // main thread. Extract raw event data BEFORE entering @MainActor so that
+    // Swift 6 does not transfer non-Sendable Carbon pointers across isolation.
     guard let event, let userData, Thread.isMainThread else {
         return OSStatus(eventNotHandledErr)
     }
+    var identifier = EventHotKeyID(signature: 0, id: 0)
+    let status = GetEventParameter(
+        event,
+        EventParamName(kEventParamDirectObject),
+        EventParamType(typeEventHotKeyID),
+        nil,
+        MemoryLayout<EventHotKeyID>.size,
+        nil,
+        &identifier
+    )
+    guard status == noErr else { return OSStatus(eventNotHandledErr) }
+
+    let backendAddress = UInt(bitPattern: userData)
+    let token = identifier.id
+    let signature = identifier.signature
     return MainActor.assumeIsolated {
-        let backend = Unmanaged<CarbonHotkeyBackend>.fromOpaque(userData).takeUnretainedValue()
-        return backend.receive(event)
+        guard let pointer = UnsafeMutableRawPointer(bitPattern: backendAddress) else {
+            return OSStatus(eventNotHandledErr)
+        }
+        let backend = Unmanaged<CarbonHotkeyBackend>.fromOpaque(pointer).takeUnretainedValue()
+        return backend.receive(token: token, signature: signature)
     }
 }
