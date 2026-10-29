@@ -2,7 +2,7 @@
 
 ![PicPaste Logo](assets/logo/picpaste.svg)
 
-> **仓库阶段：产品与技术设计基线。** 此次仓库初始化仅包含文档和 SVG 资源；截图应用、Xcode 工程和 CI 的实际实现由 GitHub Issues 分阶段跟踪。不要把仓库初始化视为截图功能已经完成。
+> **持续开发中的 macOS 原生项目。** 仓库包含 Xcode 工程、代码、CI 和 SVG 资源；分阶段实现与真机验收以 GitHub Issues / PR 为准。CI 成功不代表截图闭环或 macOS 27 真机验收已完成。
 
 PicPaste 是以 **Swift 6.4 + AppKit + SwiftUI** 开发的 Apple Silicon 原生 macOS 27 截图工具，追求离线、轻量、快速、稳定的屏幕截图、标注和贴图体验。
 
