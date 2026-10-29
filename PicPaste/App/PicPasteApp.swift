@@ -22,6 +22,7 @@ final class PicPasteDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        menuBar?.invalidate()
         menuBar = nil
     }
 }
