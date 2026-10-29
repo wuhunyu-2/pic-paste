@@ -1,0 +1,64 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="160" y1="140" x2="860" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F7F3EB"/>
+      <stop offset="1" stop-color="#F1E5D4"/>
+    </linearGradient>
+    <linearGradient id="pinGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFB23A"/>
+      <stop offset="1" stop-color="#FF6A14"/>
+    </linearGradient>
+    <linearGradient id="photoGrad" x1="348" y1="338" x2="698" y2="718" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F4F6F9"/>
+    </linearGradient>
+    <linearGradient id="hillBack" x1="500" y1="590" x2="720" y2="790" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#90A7C6"/>
+      <stop offset="1" stop-color="#6587B0"/>
+    </linearGradient>
+    <linearGradient id="hillFront" x1="360" y1="640" x2="650" y2="820" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5B79A0"/>
+      <stop offset="1" stop-color="#3E5F8F"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="0" width="1024" height="1024" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="26" flood-color="#C9B59C" flood-opacity="0.24"/>
+    </filter>
+  </defs>
+
+  <rect x="96" y="96" width="832" height="832" rx="168" fill="url(#bgGrad)"/>
+
+  <!-- Screenshot corner brackets -->
+  <g stroke="#FF8E1B" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M222 348V246H324"/>
+    <path d="M700 246H802V348"/>
+    <path d="M222 676V778H324"/>
+    <path d="M700 778H802V676"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <!-- back card -->
+    <g transform="rotate(10 580 586)">
+      <rect x="404" y="396" width="418" height="358" rx="46" fill="#D8C7B5"/>
+    </g>
+
+    <!-- front photo card -->
+    <g transform="rotate(10 512 560)">
+      <rect x="306" y="332" width="470" height="390" rx="56" fill="url(#photoGrad)"/>
+      <rect x="360" y="386" width="362" height="282" rx="38" fill="#F6EBDD"/>
+      <circle cx="476" cy="502" r="50" fill="#FFAF34"/>
+      <path d="M458 670H716V588C678 560 633 521 598 480C556 514 520 560 458 620V670Z" fill="url(#hillBack)"/>
+      <path d="M360 670H652C612 621 559 569 474 500C429 541 397 572 360 610V670Z" fill="url(#hillFront)"/>
+    </g>
+  </g>
+
+  <!-- pin -->
+  <g transform="translate(0 6)">
+    <ellipse cx="552" cy="402" rx="74" ry="28" fill="#FFC66A" opacity="0.45"/>
+    <path d="M564 410L545 498C541 516 550 532 565 538C580 543 596 533 602 517L620 436L564 410Z" fill="url(#pinGrad)"/>
+    <ellipse cx="625" cy="298" rx="87" ry="52" transform="rotate(16 625 298)" fill="url(#pinGrad)"/>
+    <ellipse cx="625" cy="286" rx="70" ry="19" transform="rotate(16 625 286)" fill="#FFC45C" opacity="0.75"/>
+    <path d="M592 523L571 511L547 582C542 597 554 607 567 601L592 523Z" fill="#7C8797"/>
+    <ellipse cx="550" cy="421" rx="28" ry="20" fill="#F4E6D6"/>
+    <ellipse cx="550" cy="421" rx="16" ry="11" fill="#DCC9B4"/>
+  </g>
+</svg>
