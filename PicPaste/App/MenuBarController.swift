@@ -21,6 +21,17 @@ final class MenuBarController {
         statusItem.menu = menu
     }
 
+    func showHotkeyRegistrationFailure(_ error: Error) {
+        let warning = NSMenuItem(
+            title: "全局快捷键不可用：\(error.localizedDescription)",
+            action: nil,
+            keyEquivalent: ""
+        )
+        warning.isEnabled = false
+        statusItem.menu?.insertItem(warning, at: 1)
+        statusItem.button?.toolTip = "PicPaste · 全局快捷键不可用，可从菜单栏操作"
+    }
+
     @objc private func capture() { coordinator.requestCapture() }
 
     @objc private func openSettings() {
