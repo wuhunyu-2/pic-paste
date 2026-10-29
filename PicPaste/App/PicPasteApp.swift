@@ -30,6 +30,7 @@ final class PicPasteDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        coordinator.cancelCapture()
         hotkeys.invalidate()
         menuBar?.invalidate()
         menuBar = nil
