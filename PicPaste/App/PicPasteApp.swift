@@ -15,13 +15,22 @@ struct PicPasteApp: App {
 @MainActor
 final class PicPasteDelegate: NSObject, NSApplicationDelegate {
     private let coordinator = AppCoordinator()
+    private let hotkeys = GlobalHotkeyManager(backend: CarbonHotkeyBackend())
     private var menuBar: MenuBarController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         menuBar = MenuBarController(coordinator: coordinator)
+        do {
+            try hotkeys.register(AppSettings.defaultCaptureHotkey) { [weak self] in
+                self?.coordinator.requestCapture()
+            }
+        } catch {
+            coordinator.reportHotkeyRegistrationFailure(error)
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        hotkeys.invalidate()
         menuBar?.invalidate()
         menuBar = nil
     }
