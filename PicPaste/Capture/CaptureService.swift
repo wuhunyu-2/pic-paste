@@ -8,9 +8,12 @@ import ScreenCaptureKit
 final class CaptureService {
     private let permissions = ScreenPermissionService()
 
-    func captureMouseDisplay() async throws -> CapturedFrame {
+    func captureMouseDisplay(onAuthorizationComplete: @escaping @MainActor () -> Void) async throws -> CapturedFrame {
         try permissions.ensureAuthorized()
         try Task.checkCancellation()
+        // User consent is not a capture timeout. Arm the deadline only after
+        // the system screen-recording authorization dialog has been resolved.
+        onAuthorizationComplete()
 
         do {
             let shareable = try await SCShareableContent.excludingDesktopWindows(
