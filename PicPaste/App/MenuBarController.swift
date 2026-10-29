@@ -13,7 +13,8 @@ final class MenuBarController {
         statusItem.button?.toolTip = "PicPaste · 截图 \(AppSettings.captureHotkeyDescription)"
         let menu = NSMenu()
         // Carbon owns the hotkey. Avoid registering a second, menu-local equivalent.
-        menu.addItem(NSMenuItem(title: "截图（\(AppSettings.captureHotkeyDescription)，功能接入中）", action: #selector(capture), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "截图（\(AppSettings.captureHotkeyDescription)）", action: #selector(capture), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "取消当前截图", action: #selector(cancelCapture), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "设置…", action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "退出 PicPaste", action: #selector(quit), keyEquivalent: "q"))
@@ -33,6 +34,8 @@ final class MenuBarController {
     }
 
     @objc private func capture() { coordinator.requestCapture() }
+
+    @objc private func cancelCapture() { coordinator.cancelCapture() }
 
     @objc private func openSettings() {
         if settingsWindow == nil {

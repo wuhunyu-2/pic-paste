@@ -6,7 +6,7 @@ struct SettingsView: View {
             Text("PicPaste").font(.title.bold())
             Text("macOS 27 · Apple Silicon · 原生截图工具")
             Text("默认截图快捷键：\(AppSettings.captureHotkeyDescription)")
-            Text("当前已接入菜单栏和全局热键；屏幕捕获将在 P0-03 实现。")
+            Text("已接入单帧屏幕捕获；原生截图选区将在 P0-05 实现。")
                 .foregroundStyle(.secondary)
         }
         .padding(24)

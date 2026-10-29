@@ -1,23 +1,40 @@
 import Foundation
 
-/// P0-02 request gate. P0-03 will add permission/capture and cancellation states.
+/// Main-actor request state. Each begin/finish changes the generation so that
+/// late ScreenCaptureKit results cannot revive a cancelled or timed-out session.
 @MainActor
 final class CaptureCoordinator {
     enum Phase: Equatable {
         case idle
-        case awaitingPlaceholderDismissal
+        case capturing
+        case showingFrozenFrame
     }
 
     private(set) var phase: Phase = .idle
+    private(set) var generation: UInt64 = 0
 
-    /// Menu bar and global hotkey share this gate; only one request may be active.
     func beginCaptureRequest() -> Bool {
         guard phase == .idle else { return false }
-        phase = .awaitingPlaceholderDismissal
+        generation &+= 1
+        phase = .capturing
+        return true
+    }
+
+    func recordCapturedFrame(for request: UInt64) -> Bool {
+        guard generation == request, phase == .capturing else { return false }
+        phase = .showingFrozenFrame
+        return true
+    }
+
+    func recordFailure(for request: UInt64) -> Bool {
+        guard generation == request, phase == .capturing else { return false }
+        phase = .idle
+        generation &+= 1
         return true
     }
 
     func finishCaptureRequest() {
         phase = .idle
+        generation &+= 1
     }
 }
