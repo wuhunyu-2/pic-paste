@@ -41,7 +41,10 @@ final class MenuBarController {
 
     @objc private func quit() { NSApp.terminate(nil) }
 
-    deinit {
+    // AppKit resources must be released on the main actor, not in a
+    // nonisolated Swift 6 deinitializer.
+    func invalidate() {
+        statusItem.menu = nil
         NSStatusBar.system.removeStatusItem(statusItem)
     }
 }
