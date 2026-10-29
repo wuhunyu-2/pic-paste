@@ -27,7 +27,9 @@ final class AppCoordinator {
                 }
             }
             do {
-                let frame = try await self.captureService.captureMouseDisplay()
+                let frame = try await self.captureService.captureMouseDisplay {
+                    self.armCaptureDeadline(for: requestID)
+                }
                 guard self.activeRequestID == requestID else { return }
                 self.deadlineTask?.cancel()
                 self.deadlineTask = nil
