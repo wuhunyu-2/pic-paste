@@ -49,7 +49,7 @@ PicPasteTests/
   PNGExportTests.swift
 ```
 
-以上是**计划中的精确路径**，初次导入设计包时尚不存在，实现时由 GitHub Issues 分步创建。后续模块：`Pins/`、`Annotations/`、`Recognition/`、`LongCapture/`；在对应阶段开始前不创建空壳目录和协议。
+以上是 **P0 文件职责基线**。实际落地以仓库源码和对应 PR 为准；不能据此推断功能已经通过真机验收。后续模块：`Pins/`、`Annotations/`、`Recognition/`、`LongCapture/`；在对应阶段开始前不创建空壳目录和协议。
 
 ## 4. P0 最小数据契约
 
@@ -84,6 +84,9 @@ struct CapturedFrame {
 ## 5. 系统 API 和线程
 
 - 用 `SCShareableContent` 获取可捕获屏幕和窗口；初版用 `SCContentFilter` + `SCScreenshotManager.captureImage` 获取单帧 `CGImage`，具体可用签名以 Xcode 27 编译结果为准。必要时评估 macOS 27 新截图配置 API，但不得混用未经验证的输出坐标语义。
+- P0-03 通过 `NSEvent.mouseLocation` → 对应 `NSScreen` 的设备 ID → `SCDisplay` 获取捕获显示器，而不是把全局 AppKit points 当成 SCDisplay 像素。输出记录实际 `CGImage.width/height`；显示器消失或 frame 改变时拒绝过期结果。
+- ScreenCaptureKit 过滤掉 PicPaste 自有应用窗口，找不到应用记录时按 `SCWindow` 排除；如果无法确认自有可见窗口被排除，宁可失败也不导出被污染的画面。捕获前不创建截图浮层；P0-03 只在捕获完成后展示源图元数据，选区浮层由 P0-05 接入。
+- `CaptureCoordinator` 以 generation 拒绝取消/超时/失败后的迟到回调，捕获超时用任务取消与 generation 废弃恢复 UI；不创建持续运行的屏幕采集流。系统 TCC 授权仍必须 macOS 27 真机验证。
 - 所有 AppKit `NSWindow`/`NSPanel`/`NSView` 生命周期和鼠标焦点改变在 `@MainActor`。
 - P0 全局快捷键使用系统 Carbon `RegisterEventHotKey` 与 `InstallEventHandler` 的应用级热键事件；不使用全局键盘事件监听、Event Tap 或辅助功能权限替代。`GlobalHotkeyManager` 先注册新绑定，成功后才注销旧绑定，冲突则保留旧快捷键；退出时在主线程明确取消注册并移除 handler。
 - P0-02 的菜单与热键统一提交到 `CaptureCoordinator` 的请求闸门，重复触发不得并发进入截图会话。P0-03 再将临时事件确认提示替换为真实 ScreenCaptureKit 截图及错误/取消状态。
