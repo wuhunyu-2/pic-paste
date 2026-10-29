@@ -15,16 +15,10 @@ final class AppCoordinator {
         let alert = NSAlert()
         alert.messageText = "PicPaste 截图事件已接收"
         alert.informativeText = "屏幕捕获将在 P0-03 接入；当前只验证全局快捷键与菜单栏事件。"
-        alert.begin { [weak self] _ in
-            self?.capture.finishCaptureRequest()
-        }
-    }
-
-    func reportHotkeyRegistrationFailure(_ error: Error) {
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = "全局截图快捷键注册失败"
-        alert.informativeText = "\(error.localizedDescription)\n你仍可通过菜单栏打开截图入口。"
-        alert.begin(completionHandler: nil)
+        // The temporary P0-02 verification alert is modal. The request gate
+        // stays active until dismissal, even if the nested event loop receives
+        // another global shortcut.
+        defer { capture.finishCaptureRequest() }
+        _ = alert.runModal()
     }
 }
