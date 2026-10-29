@@ -1,0 +1,36 @@
+name: Native macOS CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  native:
+    runs-on: xcode-27
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain and source revision
+        run: |
+          xcodebuild -version
+          sw_vers
+          echo "SOURCE_SHA=$GITHUB_SHA"
+          uname -m
+      - name: Build and test
+        run: |
+          xcodebuild -project PicPaste.xcodeproj -scheme PicPaste -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO test
+      - name: Build unsigned development app
+        run: |
+          xcodebuild -project PicPaste.xcodeproj -scheme PicPaste -configuration Release -destination 'generic/platform=macOS,arch=arm64' -derivedDataPath "$RUNNER_TEMP/PicPasteDerived" CODE_SIGNING_ALLOWED=NO build
+          APP="$RUNNER_TEMP/PicPasteDerived/Build/Products/Release/PicPaste.app"
+          test -d "$APP"
+          mkdir -p dist
+          printf '%s\n' "$GITHUB_SHA" > dist/SOURCE_SHA.txt
+          ditto -c -k --keepParent "$APP" dist/PicPaste-macOS27-arm64-unsigned.zip
+          shasum -a 256 dist/PicPaste-macOS27-arm64-unsigned.zip > dist/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PicPaste-macOS27-arm64-unsigned
+          path: dist/
+          if-no-files-found: error
