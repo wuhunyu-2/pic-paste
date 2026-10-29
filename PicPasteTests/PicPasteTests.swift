@@ -8,4 +8,9 @@ final class PicPasteTests: XCTestCase {
         XCTAssertEqual(coordinator.captureRequestCount, 0)
         // Do not invoke the modal placeholder in the unit test.
     }
+
+    func testMenuBarSupportsExplicitMainActorCleanup() {
+        let menuBar = MenuBarController(coordinator: AppCoordinator())
+        menuBar.invalidate()
+    }
 }
