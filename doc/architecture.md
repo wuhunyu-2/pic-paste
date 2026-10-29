@@ -85,6 +85,8 @@ struct CapturedFrame {
 
 - 用 `SCShareableContent` 获取可捕获屏幕和窗口；初版用 `SCContentFilter` + `SCScreenshotManager.captureImage` 获取单帧 `CGImage`，具体可用签名以 Xcode 27 编译结果为准。必要时评估 macOS 27 新截图配置 API，但不得混用未经验证的输出坐标语义。
 - 所有 AppKit `NSWindow`/`NSPanel`/`NSView` 生命周期和鼠标焦点改变在 `@MainActor`。
+- P0 全局快捷键使用系统 Carbon `RegisterEventHotKey` 与 `InstallEventHandler` 的应用级热键事件；不使用全局键盘事件监听、Event Tap 或辅助功能权限替代。`GlobalHotkeyManager` 先注册新绑定，成功后才注销旧绑定，冲突则保留旧快捷键；退出时在主线程明确取消注册并移除 handler。
+- P0-02 的菜单与热键统一提交到 `CaptureCoordinator` 的请求闸门，重复触发不得并发进入截图会话。P0-03 再将临时事件确认提示替换为真实 ScreenCaptureKit 截图及错误/取消状态。
 - 异步捕获、PNG 编码、长图拼接和 OCR 不得在主线程执行长时间密集计算；返回 UI 的状态变化只在主线程。
 - `NSPanel` 的 level、activation、collectionBehavior 与 `CanJoinAllSpaces`/`FullScreenAuxiliary` 不是纸面正确即视为可用；在 macOS 27 真机测试中确定。
 - Glass 仅用于工具栏、按钮等控制层；绝不可改变被截取、合成或导出的图像像素。
