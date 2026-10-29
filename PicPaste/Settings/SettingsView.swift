@@ -5,7 +5,8 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("PicPaste").font(.title.bold())
             Text("macOS 27 · Apple Silicon · 原生截图工具")
-            Text("当前为 P0-01 工程启动基线，截图功能尚未实现。")
+            Text("默认截图快捷键：\(AppSettings.captureHotkeyDescription)")
+            Text("当前已接入菜单栏和全局热键；屏幕捕获将在 P0-03 实现。")
                 .foregroundStyle(.secondary)
         }
         .padding(24)

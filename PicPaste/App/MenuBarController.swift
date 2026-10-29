@@ -10,14 +10,26 @@ final class MenuBarController {
     init(coordinator: AppCoordinator) {
         self.coordinator = coordinator
         statusItem.button?.image = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "PicPaste")
-        statusItem.button?.toolTip = "PicPaste"
+        statusItem.button?.toolTip = "PicPaste · 截图 \(AppSettings.captureHotkeyDescription)"
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "截图（尚未实现）", action: #selector(capture), keyEquivalent: ""))
+        // Carbon owns the hotkey. Avoid registering a second, menu-local equivalent.
+        menu.addItem(NSMenuItem(title: "截图（\(AppSettings.captureHotkeyDescription)，功能接入中）", action: #selector(capture), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "设置…", action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "退出 PicPaste", action: #selector(quit), keyEquivalent: "q"))
         for item in menu.items { item.target = self }
         statusItem.menu = menu
+    }
+
+    func showHotkeyRegistrationFailure(_ error: Error) {
+        let warning = NSMenuItem(
+            title: "全局快捷键不可用：\(error.localizedDescription)",
+            action: nil,
+            keyEquivalent: ""
+        )
+        warning.isEnabled = false
+        statusItem.menu?.insertItem(warning, at: 1)
+        statusItem.button?.toolTip = "PicPaste · 全局快捷键不可用，可从菜单栏操作"
     }
 
     @objc private func capture() { coordinator.requestCapture() }
@@ -41,8 +53,7 @@ final class MenuBarController {
 
     @objc private func quit() { NSApp.terminate(nil) }
 
-    // AppKit resources must be released on the main actor, not in a
-    // nonisolated Swift 6 deinitializer.
+    // AppKit objects must be invalidated on the main actor, not in deinit.
     func invalidate() {
         statusItem.menu = nil
         NSStatusBar.system.removeStatusItem(statusItem)
