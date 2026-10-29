@@ -1,0 +1,25 @@
+name: Bug 报告
+about: 可复现的功能故障（需实测环境与复现步骤）
+title: "[Bug] "
+labels: []
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 重现步骤和预期/实际结果
+      description: 写清操作、是否稳定复现以及预期行为
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 设备、macOS build 与应用来源 SHA
+      description: 真机问题需注明 CPU、显示器、权限状态；若无法获取请如实说明
+    validations:
+      required: false
+  - type: textarea
+    id: proof
+    attributes:
+      label: 截图/录屏/日志与最小复现
+    validations:
+      required: false
