@@ -25,7 +25,7 @@ final class PicPasteDelegate: NSObject, NSApplicationDelegate {
                 self?.coordinator.requestCapture()
             }
         } catch {
-            coordinator.reportHotkeyRegistrationFailure(error)
+            menuBar?.showHotkeyRegistrationFailure(error)
         }
     }
 
