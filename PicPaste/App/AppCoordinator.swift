@@ -1,3 +1,4 @@
+import UniformTypeIdentifiers
 import AppKit
 
 @MainActor
@@ -83,14 +84,42 @@ final class AppCoordinator {
         selectionPanel.present(frame: frame) { [weak self] result in
             guard let self else { return }
             self.capture.finishCaptureRequest()
-            // PNG and clipboard export will be integrated by P0-06.
-            if let result {
-                let alert = NSAlert()
-                alert.messageText = "已确认选区"
-                alert.informativeText = "源图像素区域：\(result.x), \(result.y), \(result.width) × \(result.height)。复制与保存将在 P0-06 接入。"
-                NSApp.activate(ignoringOtherApps: true)
-                _ = alert.runModal()
+            guard let result else { return }
+            self.exportSelection(frame: frame, pixelRect: result)
+        }
+    }
+
+    private func exportSelection(frame: CapturedFrame, pixelRect: PixelRect) {
+        do {
+            let composed = try ImageComposer.compose(source: frame.image, crop: pixelRect, radius: 0)
+            let pngData = try PNGExporter.encode(composed)
+            let alert = NSAlert()
+            alert.messageText = "截图已准备好"
+            alert.informativeText = "选择复制 PNG 到剪贴板或保存 PNG 文件。"
+            alert.addButton(withTitle: "复制")
+            alert.addButton(withTitle: "保存…")
+            alert.addButton(withTitle: "取消")
+            NSApp.activate(ignoringOtherApps: true)
+            switch alert.runModal() {
+            case .alertFirstButtonReturn:
+                if !ClipboardWriter.copyPNG(pngData) {
+                    presentError(PNGExportError.encodingFailed)
+                }
+            case .alertSecondButtonReturn:
+                let savePanel = NSSavePanel()
+                savePanel.allowedContentTypes = [.png]
+                savePanel.nameFieldStringValue = "PicPaste.png"
+                if savePanel.runModal() == .OK, let target = savePanel.url {
+                    // Do not overwrite any pre-existing file, including through a save dialog.
+                    let destination = try PNGExporter.save(pngData, in: target.deletingLastPathComponent())
+                    if destination != target {
+                        NSWorkspace.shared.activateFileViewerSelecting([destination])
+                    }
+                }
+            default: break
             }
+        } catch {
+            presentError(error)
         }
     }
 
