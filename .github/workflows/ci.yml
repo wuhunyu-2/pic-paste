@@ -57,14 +57,15 @@ jobs:
             PicPaste/Export/PNGExporter.swift \
             PicPaste/Export/ClipboardWriter.swift
           "$RUNNER_TEMP/picpaste-live-e2e"
-      - name: Verify own-window exclusion and eight live captures
-        timeout-minutes: 4
+      - name: Verify own-window exclusion, 30 captures, cancelled retries and memory bound
+        timeout-minutes: 5
         run: |
           xcrun swiftc -o "$RUNNER_TEMP/picpaste-own-window-repeat" \
             scripts/tests/macos_capture_own_window_repeat.swift \
             PicPaste/Capture/CapturedFrame.swift \
             PicPaste/Capture/ScreenPermissionService.swift \
-            PicPaste/Capture/CaptureService.swift
+            PicPaste/Capture/CaptureService.swift \
+            PicPaste/Capture/CaptureCoordinator.swift
           "$RUNNER_TEMP/picpaste-own-window-repeat"
       - name: Build and test
         run: |
