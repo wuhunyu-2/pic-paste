@@ -25,6 +25,18 @@ final class PNGExportTests: XCTestCase {
         XCTAssertThrowsError(try ImageComposer.compose(source: source(), crop: PixelRect(x: 0, y: 0, width: 2, height: 2), radius: 65))
     }
 
+    func testSaveToChosenURLPreservesNameAndRefusesOverwrite() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let target = directory.appendingPathComponent("custom-name.png")
+        let png = try PNGExporter.encode(source())
+        try PNGExporter.save(png, to: target)
+        XCTAssertEqual(try Data(contentsOf: target), png)
+        XCTAssertThrowsError(try PNGExporter.save(Data("replacement".utf8), to: target))
+        XCTAssertEqual(try Data(contentsOf: target), png)
+    }
+
     func testPNGUniqueFilesNeverOverwrite() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
