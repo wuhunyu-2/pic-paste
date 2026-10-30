@@ -87,6 +87,9 @@ jobs:
           xcodebuild -project PicPaste.xcodeproj -scheme PicPaste -configuration Release -destination 'platform=macOS,arch=arm64' -derivedDataPath "$RUNNER_TEMP/PicPasteDerived" CODE_SIGNING_ALLOWED=NO build
           APP="$RUNNER_TEMP/PicPasteDerived/Build/Products/Release/PicPaste.app"
           test -d "$APP"
+          # The downloadable app must have a valid signature; a ZIP checksum
+          # alone cannot prove macOS can validate the extracted application.
+          codesign --verify --deep --strict --verbose=2 "$APP"
           mkdir -p dist
           printf '%s\n' "$SOURCE_SHA" > dist/SOURCE_SHA.txt
           git rev-parse HEAD > dist/CHECKOUT_SHA.txt
