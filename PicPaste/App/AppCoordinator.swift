@@ -110,11 +110,7 @@ final class AppCoordinator {
                 savePanel.allowedContentTypes = [.png]
                 savePanel.nameFieldStringValue = "PicPaste.png"
                 if savePanel.runModal() == .OK, let target = savePanel.url {
-                    // Do not overwrite any pre-existing file, including through a save dialog.
-                    let destination = try PNGExporter.save(pngData, in: target.deletingLastPathComponent())
-                    if destination != target {
-                        NSWorkspace.shared.activateFileViewerSelecting([destination])
-                    }
+                    try PNGExporter.save(pngData, to: target)
                 }
             default: break
             }
