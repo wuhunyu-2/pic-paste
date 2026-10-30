@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import ImageIO
 import ScreenCaptureKit
 import XCTest
 @testable import PicPaste
@@ -156,6 +157,141 @@ final class PicPasteTests: XCTestCase {
         XCTAssertEqual(result.image.height, result.geometry.imageHeightPixels)
         XCTAssertTrue(NSScreen.screens.contains(where: { $0.frame == result.geometry.desktopFramePoints }))
         print("CI_CAPTURE_SERVICE_RESULT=PASS image=\(result.image.width)x\(result.image.height)")
+    }
+
+
+    // These events go through SelectionView's real NSResponder overrides and
+    // its owning NSPanel. No CGEvent posts, real mouse or TCC are implied.
+    private func sendMouse(
+        _ type: NSEvent.EventType, at point: CGPoint,
+        to view: SelectionView, in panel: NSPanel
+    ) throws {
+        let event = try XCTUnwrap(NSEvent.mouseEvent(
+            with: type, location: point, modifierFlags: [], timestamp: 0,
+            windowNumber: panel.windowNumber, context: nil,
+            eventNumber: 1, clickCount: 1, pressure: 1
+        ))
+        switch type {
+        case .leftMouseDown: view.mouseDown(with: event)
+        case .leftMouseDragged: view.mouseDragged(with: event)
+        case .leftMouseUp: view.mouseUp(with: event)
+        default: XCTFail("Unsupported synthetic mouse event")
+        }
+    }
+
+    private func drag(
+        from start: CGPoint, to end: CGPoint,
+        on view: SelectionView, panel: NSPanel
+    ) throws {
+        try sendMouse(.leftMouseDown, at: start, to: view, in: panel)
+        try sendMouse(.leftMouseDragged, at: end, to: view, in: panel)
+        try sendMouse(.leftMouseUp, at: end, to: view, in: panel)
+    }
+
+    private func confirmWithEnter(on view: SelectionView, panel: NSPanel) throws {
+        let enter = try XCTUnwrap(NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: panel.windowNumber, context: nil,
+            characters: "\r", charactersIgnoringModifiers: "\r",
+            isARepeat: false, keyCode: 36
+        ))
+        view.keyDown(with: enter)
+    }
+
+    func testMouseDragEnterProducesExpectedCropPNGAndPasteboardData() throws {
+        let controller = SelectionPanelController()
+        defer { controller.dismiss() }
+        let frozen = try makeSelectionFixture()
+        var results: [PixelRect?] = []
+        controller.present(frame: frozen) { results.append($0) }
+        let panel = try XCTUnwrap(visibleSelectionPanels().first)
+        let view = try XCTUnwrap(panel.contentView as? SelectionView)
+
+        // View-local y-up points (160x100), original CGImage is 16x16 pixels.
+        try drag(from: CGPoint(x: 20, y: 20), to: CGPoint(x: 100, y: 70),
+                 on: view, panel: panel)
+        try confirmWithEnter(on: view, panel: panel)
+        try confirmWithEnter(on: view, panel: panel) // no duplicate callback
+
+        XCTAssertEqual(results.count, 1)
+        let crop = try XCTUnwrap(results[0])
+        XCTAssertEqual(crop, PixelRect(x: 2, y: 4, width: 8, height: 9))
+        XCTAssertFalse(panel.isVisible)
+        XCTAssertTrue(visibleSelectionPanels().isEmpty)
+
+        let composed = try ImageComposer.compose(source: frozen.image, crop: crop, radius: 0)
+        let png = try PNGExporter.encode(composed)
+        let src = try XCTUnwrap(CGImageSourceCreateWithData(png as CFData, nil))
+        let output = try XCTUnwrap(CGImageSourceCreateImageAtIndex(src, 0, nil))
+        XCTAssertEqual(output.width, 8)
+        XCTAssertEqual(output.height, 9)
+
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("PicPaste-Mouse-CI-\(UUID().uuidString)"))
+        XCTAssertTrue(ClipboardWriter.copyPNG(png, to: pasteboard))
+        XCTAssertEqual(pasteboard.data(forType: .png), png)
+    }
+
+    func testMouseMoveThenEnterClampsCoordinatesOnRealOverlay() throws {
+        let controller = SelectionPanelController()
+        defer { controller.dismiss() }
+        var result: PixelRect?
+        controller.present(frame: try makeSelectionFixture()) { result = $0 }
+        let panel = try XCTUnwrap(visibleSelectionPanels().first)
+        let view = try XCTUnwrap(panel.contentView as? SelectionView)
+
+        try drag(from: CGPoint(x: 20, y: 20), to: CGPoint(x: 100, y: 70),
+                 on: view, panel: panel)
+        try drag(from: CGPoint(x: 50, y: 45), to: CGPoint(x: 70, y: 55),
+                 on: view, panel: panel)
+        try confirmWithEnter(on: view, panel: panel)
+
+        XCTAssertEqual(result, PixelRect(x: 4, y: 3, width: 8, height: 9))
+        XCTAssertTrue(visibleSelectionPanels().isEmpty)
+    }
+
+    func testAllEightMouseHandlesMapToExactSourcePixelCrops() throws {
+        struct Scenario {
+            let name: String
+            let grab: CGPoint
+            let target: CGPoint
+            let expected: PixelRect
+        }
+        let scenarios = [
+            Scenario(name: "top-left", grab: CGPoint(x: 20, y: 80),
+                     target: CGPoint(x: 10, y: 90), expected: PixelRect(x: 1, y: 1, width: 11, height: 12)),
+            Scenario(name: "top", grab: CGPoint(x: 70, y: 80),
+                     target: CGPoint(x: 70, y: 90), expected: PixelRect(x: 2, y: 1, width: 10, height: 12)),
+            Scenario(name: "top-right", grab: CGPoint(x: 120, y: 80),
+                     target: CGPoint(x: 130, y: 90), expected: PixelRect(x: 2, y: 1, width: 11, height: 12)),
+            Scenario(name: "right", grab: CGPoint(x: 120, y: 50),
+                     target: CGPoint(x: 130, y: 50), expected: PixelRect(x: 2, y: 3, width: 11, height: 10)),
+            Scenario(name: "bottom-right", grab: CGPoint(x: 120, y: 20),
+                     target: CGPoint(x: 130, y: 10), expected: PixelRect(x: 2, y: 3, width: 11, height: 12)),
+            Scenario(name: "bottom", grab: CGPoint(x: 70, y: 20),
+                     target: CGPoint(x: 70, y: 10), expected: PixelRect(x: 2, y: 3, width: 10, height: 12)),
+            Scenario(name: "bottom-left", grab: CGPoint(x: 20, y: 20),
+                     target: CGPoint(x: 10, y: 10), expected: PixelRect(x: 1, y: 3, width: 11, height: 12)),
+            Scenario(name: "left", grab: CGPoint(x: 20, y: 50),
+                     target: CGPoint(x: 10, y: 50), expected: PixelRect(x: 1, y: 3, width: 11, height: 10))
+        ]
+
+        let controller = SelectionPanelController()
+        defer { controller.dismiss() }
+        let frozen = try makeSelectionFixture()
+        for scenario in scenarios {
+            var results: [PixelRect?] = []
+            controller.present(frame: frozen) { results.append($0) }
+            let panel = try XCTUnwrap(visibleSelectionPanels().first)
+            let view = try XCTUnwrap(panel.contentView as? SelectionView)
+            try drag(from: CGPoint(x: 20, y: 20), to: CGPoint(x: 120, y: 80),
+                     on: view, panel: panel)
+            try drag(from: scenario.grab, to: scenario.target, on: view, panel: panel)
+            try confirmWithEnter(on: view, panel: panel)
+
+            XCTAssertEqual(results.count, 1, scenario.name)
+            XCTAssertEqual(results.first ?? nil, scenario.expected, scenario.name)
+            XCTAssertTrue(visibleSelectionPanels().isEmpty, scenario.name)
+        }
     }
 
 }

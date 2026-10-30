@@ -83,3 +83,13 @@ CI 在 `xcode-27` 环境执行 `xcrun swift scripts/tests/macos_desktop_session_
 - `testRealCaptureServiceOnAuthorizedDesktop` 尝试由实际 XCTest 宿主运行 `CaptureService.captureMouseDisplay`；若宿主进程未被 TCC 预授权或鼠标不在屏幕内，会以 **XCTSkip** 明确跳过。**跳过必须记录为未测试，不能计为成功。**
 - 为减少 XCTest 宿主 TCC 限制，CI 另用 `xcrun swiftc` 将仓库中的 **原始** `CaptureService.swift`、`CapturedFrame.swift`、`ScreenPermissionService.swift` 与 `scripts/tests/macos_capture_service_probe.swift` 编译为单独的探测程序。该程序只在其自身已获得屏幕录制预授权时调用 `captureMouseDisplay`，仅输出尺寸、displayID、错误类型与 `CI_APP_CAPTURE_SERVICE_RESULT`，不保存或上传图片。该生产源码实调已在 PR CI 输出过 `CI_APP_CAPTURE_SERVICE_RESULT=PASS`，随后升级为**强制 CI 门槛**（不设置 `continue-on-error`）：缺少权限、没有鼠标所在显示器、捕获失败或编译失败均导致该步骤失败。必须同时检查日志中的 `CI_APP_CAPTURE_SERVICE_RESULT=PASS` 和正确 SHA 的 Actions 结果，不能将独立探针成功推断为 XCTest 宿主的 TCC 通过。
 - 所有这些 CI 测试仍发生在托管的虚拟 macOS 图形会话中，不能替代第 3 节所要求的首次 TCC 授权/撤销、真实多屏、Spaces、物理焦点恢复和跨应用粘贴。只有真实环境证据可设置 `DEVICE_VERIFIED`。
+
+## 10. 选区原生鼠标事件到 PNG / 剪贴板的 CI 集成回归
+
+`PicPasteTests/PicPasteTests.swift` 在 macOS runner 创建真实的 `SelectionPanelController`、`NSPanel`、`SelectionView`，用构造的 `NSEvent.mouseEvent` 调用视图的 `mouseDown`、`mouseDragged`、`mouseUp`，再使用构造的 Enter `NSEvent.keyDown` 确认：
+
+- 拖选后断言 `PixelRect` 的确切源像素坐标，并将同一个合成冻结 `CGImage` 交给 `ImageComposer` 与 `PNGExporter`，通过 ImageIO 解码核验输出宽高，写入独立命名的真实 `NSPasteboard` 并回读原始 PNG 字节。
+- 拖选后再在选区内部拖动，核验移动和 AppKit y-up → CGImage y-down 映射后的确切像素坐标。
+- 分别操作八个选区调整手柄（上左、上、上右、右、下右、下、下左、左），断言完成回调仅一次、像素裁剪位置和尺寸正确、窗口清理完成。
+
+这些测试验证的是**生产 AppKit 视图及窗口的事件处理**，而非纯几何函数；但事件由 XCTest 构造并直接送入 NSResponder 方法，冻结图像为合成数据，并不模拟操作系统全局鼠标投递、物理光标焦点、首次 TCC、真实多显示器/Spaces 或 Preview/Notes 跨进程粘贴。不可据此把 P0-07 标记为 `DEVICE_VERIFIED`。实际鼠标与设备场景仍遵循第 3 节记录。
