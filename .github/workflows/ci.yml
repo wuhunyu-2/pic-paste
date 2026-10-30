@@ -31,8 +31,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: 3
         run: xcrun swift scripts/tests/macos_capture_session_probe.swift
-      - name: Probe PicPaste CaptureService implementation on macOS (informational)
-        continue-on-error: true
+      - name: Verify real PicPaste CaptureService on hosted macOS
         timeout-minutes: 3
         run: |
           xcrun swiftc -o "$RUNNER_TEMP/picpaste-capture-service-probe" \
