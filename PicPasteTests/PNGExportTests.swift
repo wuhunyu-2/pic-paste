@@ -24,11 +24,11 @@ final class PNGExportTests: XCTestCase {
         XCTAssertEqual(image.height, 16)
         let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 16 * 16 * 4)
         defer { buffer.deallocate() }
-        let context = try XCTUnwrap(CGContext(data: buffer, width: 4, height: 4, bitsPerComponent: 8,
-            bytesPerRow: 16, space: CGColorSpaceCreateDeviceRGB(),
+        let context = try XCTUnwrap(CGContext(data: buffer, width: 16, height: 16, bitsPerComponent: 8,
+            bytesPerRow: 64, space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
         context.clear(CGRect(x: 0, y: 0, width: 16, height: 16))
-        context.draw(image, in: CGRect(x: 0, y: 0, width: 4, height: 4))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: 16, height: 16))
         print("PNG_ALPHA_DIAGNOSTIC corner=\(buffer[3]) center=\(buffer[(8 * 16 + 8) * 4 + 3]) sourceAlpha=\(String(describing: image.alphaInfo))")
         XCTAssertLessThan(buffer[3], 128, "Outer corner must be mostly transparent; edge anti-aliasing is permitted")
         XCTAssertGreaterThan(buffer[(8 * 16 + 8) * 4 + 3], 0, "Center must remain opaque")
