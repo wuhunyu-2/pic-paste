@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import ImageIO
 import Foundation
@@ -55,6 +56,19 @@ final class PNGExportTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: target), png)
         XCTAssertThrowsError(try PNGExporter.save(Data("replacement".utf8), to: target))
         XCTAssertEqual(try Data(contentsOf: target), png)
+    }
+
+
+    func testClipboardRoundTripUsesActualPNGBytesOnIsolatedPasteboard() throws {
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("PicPaste-CI-\(UUID().uuidString)"))
+        let png = try PNGExporter.encode(source(size: 16))
+        XCTAssertTrue(ClipboardWriter.copyPNG(png, to: pasteboard))
+        XCTAssertEqual(pasteboard.data(forType: .png), png)
+
+        let reader = try XCTUnwrap(CGImageSourceCreateWithData(png as CFData, nil))
+        let decoded = try XCTUnwrap(CGImageSourceCreateImageAtIndex(reader, 0, nil))
+        XCTAssertEqual(decoded.width, 16)
+        XCTAssertEqual(decoded.height, 16)
     }
 
     func testPNGUniqueFilesNeverOverwrite() throws {
