@@ -132,3 +132,24 @@ P0-32 回归验证使用独立的 macOS CI 进程，在 Screen Recording 已被�
 通过 `/bin/ps -o rss=` 对**当前 CI 测试进程**采集 RSS（KiB）；在第 3 帧成功截图后建立预热基线，此后每隔约 5 帧测量峰值。若峰值相对于预热基线增长超过 **256 MiB**，CI 失败。日志记录 `CI_CAPTURE_RSS_BASELINE_KIB`、`CI_CAPTURE_RSS_PEAK_GROWTH_KIB`、`CI_CAPTURE_RSS_GROWTH_LIMIT_KIB=262144` 和 `CI_CAPTURE_RSS_BOUND_RESULT=PASS`。该短程宽松阈值是捕捉明显资源异常的**烟雾测试**，不等同于长期内存泄漏证明，也不测量独立 GPU 资源和长期任务句柄。所有截图仅在本机内存中处理，不上传像素。
 
 **验收边界**：真实像素采集发生在 GitHub 托管的**单个虚拟显示器**，预先取消通过代码发起，不是物理鼠标/键盘及用户权限弹窗交互；不能把这 30 帧视为第 3 节完整的 30 次真实设备截图交互验收。物理多屏、Spaces、系统 TCC、焦点和跨应用粘贴均需真实设备证据，`DEVICE_VERIFIED` 不因此改变。
+
+
+## 15. 可下载安装的 ad-hoc 开发版（非 Apple 公证发行）
+
+针对 P0-34「下载后提示应用已损坏」的反馈，CI 原先以 `CODE_SIGNING_ALLOWED=NO` 编译 Release，然后直接 ZIP 打包、校验 SHA256；但 **ZIP 校验通过不代表 .app 的代码签名完整**。2026-10-30 首次加入严格 `codesign --verify --deep --strict` 后，CI 在原始 Release bundle 上复现 `code has no resources but signature indicates they must be present`。这是已核实的打包完整性问题；用户电脑上的 Gatekeeper 是否还有其他拒绝原因，需要在真机进一步确认。
+
+修复流程：保留原来 Xcode Release build，但在所有输出文件生成完毕后运行 `codesign --force --sign - --timestamp=none PicPaste.app`，随后在 CI **打包前、ZIP 解压后**两次使用 `codesign --verify --deep --strict` 强制验证；另外检查 `Contents/MacOS/PicPaste` 可执行、Mach-O 仅 `arm64`、Bundle ID 为 `com.wuhunyu.picpaste` 和最低 macOS 为 `27.0`。最终产物改名为 `PicPaste-macOS27-arm64-adhoc`，内层为同名 ZIP，并含 `SHA256SUMS`、`SOURCE_SHA.txt`、`CHECKOUT_SHA.txt`、`SIGNING_MODE.txt`。本机采证脚本 `scripts/collect-p0-evidence.sh` 支持新包和旧版 `unsigned.zip`（后者仅能做历史 SHA 校验，不说明旧签名有效）。
+
+**开发包安装与确认（仅限信任 GitHub 仓库源码和产物的开发测试人员）**：从 GitHub Actions 的 `PicPaste-macOS27-arm64-adhoc` 下载**外层** artifact ZIP，解压后在其目录执行：
+
+```bash
+shasum -a 256 -c SHA256SUMS
+ditto -x -k PicPaste-macOS27-arm64-adhoc.zip .
+codesign --verify --deep --strict --verbose=2 PicPaste.app
+sw_vers -productVersion
+uname -m
+```
+
+请确认系统至少 macOS 27、架构为 arm64，再将 `PicPaste.app` 移到 `/Applications` 并打开。若 Gatekeeper 拒绝未公证应用，可依照 Apple 建议尝试 **系统设置 → 隐私与安全性 → 仍要打开**；只在已验证来源、文件 SHA256 和代码签名、确知风险的**单个测试 App**上，才考虑手动移除它的 `com.apple.quarantine` 属性。不要关闭系统的 Gatekeeper，也不要将这种人工放行称为「正式版直接双击可运行」。
+
+**重要界限**：ad-hoc 签名可验证完整性，但**不等于** Developer ID 身份签名和 Apple 公证，隔离属性仍可能阻止首次直接打开。正式安全分发属于 P5-02（Issue #15），不能在没有 Developer ID 证书与 Apple 公证结果时宣称完成。即使 CI 解压后的签名和启动测试通过，`DEVICE_VERIFIED` 仍需真实 macOS 27 设备验收。
