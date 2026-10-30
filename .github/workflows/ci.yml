@@ -40,6 +40,23 @@ jobs:
             PicPaste/Capture/ScreenPermissionService.swift \
             PicPaste/Capture/CaptureService.swift
           "$RUNNER_TEMP/picpaste-capture-service-probe"
+      - name: Verify live PicPaste capture to selection PNG and pasteboard
+        timeout-minutes: 3
+        run: |
+          xcrun swiftc -o "$RUNNER_TEMP/picpaste-live-e2e" \
+            scripts/tests/macos_live_capture_selection_export.swift \
+            PicPaste/Capture/CapturedFrame.swift \
+            PicPaste/Capture/ScreenPermissionService.swift \
+            PicPaste/Capture/CaptureService.swift \
+            PicPaste/Capture/CaptureCoordinator.swift \
+            PicPaste/Selection/SelectionGeometry.swift \
+            PicPaste/Selection/SelectionInteraction.swift \
+            PicPaste/Selection/SelectionView.swift \
+            PicPaste/Selection/SelectionPanelController.swift \
+            PicPaste/Export/ImageComposer.swift \
+            PicPaste/Export/PNGExporter.swift \
+            PicPaste/Export/ClipboardWriter.swift
+          "$RUNNER_TEMP/picpaste-live-e2e"
       - name: Build and test
         run: |
           xcodebuild -project PicPaste.xcodeproj -scheme PicPaste -destination 'platform=macOS,arch=arm64' -resultBundlePath "$RUNNER_TEMP/PicPasteTests.xcresult" CODE_SIGNING_ALLOWED=NO test
