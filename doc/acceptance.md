@@ -62,3 +62,9 @@ bash scripts/collect-p0-evidence.sh /path/to/extracted-artifact > p0-07-device-e
 生成的 Markdown **默认所有操作均为“未执行”**。人工运行开发 App 后，逐行将结果填写为 PASS / FAIL / BLOCKED，补充截图/录屏、外接显示器排列与缩放、测试实际步骤和失败 Issue；再将已填写的报告附到 #7。即使本脚本成功，`DEVICE_VERIFIED` 仍为 NO。脚本的 GitHub Actions 测试只使用合成输入，不能当作物理设备验证。
 
 P0 验收最终是否通过，仍依照第 3 节完整真机矩阵和 Issue #7 人工证据决定。
+
+## 7. GitHub-hosted macOS 的桌面窗口探针
+
+CI 在 `xcode-27` 环境执行 `xcrun swift scripts/tests/macos_desktop_session_probe.swift`，尝试创建、显示和关闭一块 AppKit `NSPanel`，并打印当前虚拟显示器数量、Screen Recording 与 Accessibility 的既有授权状态。首次引入时设置 `continue-on-error: true`，因为它是对 runner 是否存在可用 WindowServer 图形会话的**探测**，不应在能力确认前直接阻断已有测试。`CI_DESKTOP_PROBE_RESULT=PASS` 只能证明 CI 会话可以进行基础 AppKit 窗口生命周期操作；`UNAVAILABLE` 或脚本失败则意味着需要确认运行环境，不代表 App 功能故障。
+
+在 `PicPasteTests.swift` 中基于合成 `CapturedFrame` 测试 PicPaste 自身 `SelectionPanelController` 的原生 `NSPanel` 显示、主动关闭、重复打开时旧窗口清理和取消回调幂等；这些 XCTest 可在 runner 的 WindowServer 会话上运行，但不需要真实屏幕捕获权限或硬件交互。下一步可进一步扩展事件注入及实际 ScreenCaptureKit 测试，并分别检查进程级 TCC 权限，而不是从独立 Swift 探针推断 App 授权。ScreenCaptureKit 首次 TCC 授权、真实多显示器负坐标与物理显示器连接、Spaces/全屏、用户级焦点恢复及系统应用粘贴，仍需对照第 3 节的真实设备证据验收。禁止将 CI 的虚拟面板显示结果替换 `DEVICE_VERIFIED`。
