@@ -63,9 +63,10 @@ final class PNGExportTests: XCTestCase {
         let pasteboard = NSPasteboard(name: NSPasteboard.Name("PicPaste-CI-\(UUID().uuidString)"))
         let png = try PNGExporter.encode(source(size: 16))
         XCTAssertTrue(ClipboardWriter.copyPNG(png, to: pasteboard))
-        XCTAssertEqual(pasteboard.data(forType: .png), png)
+        let copied = try XCTUnwrap(pasteboard.data(forType: .png))
+        XCTAssertEqual(copied, png)
 
-        let reader = try XCTUnwrap(CGImageSourceCreateWithData(png as CFData, nil))
+        let reader = try XCTUnwrap(CGImageSourceCreateWithData(copied as CFData, nil))
         let decoded = try XCTUnwrap(CGImageSourceCreateImageAtIndex(reader, 0, nil))
         XCTAssertEqual(decoded.width, 16)
         XCTAssertEqual(decoded.height, 16)
