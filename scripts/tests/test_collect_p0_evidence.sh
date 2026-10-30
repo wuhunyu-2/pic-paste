@@ -5,10 +5,10 @@ script="$root/scripts/collect-p0-evidence.sh"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/artifact" "$work/bin"
-printf 'synthetic app bundle archive\n' > "$work/artifact/PicPaste-macOS27-arm64-unsigned.zip"
+printf 'synthetic app bundle archive\n' > "$work/artifact/PicPaste-macOS27-arm64-adhoc.zip"
 printf '%s\n' '1234567890abcdef1234567890abcdef12345678' > "$work/artifact/SOURCE_SHA.txt"
 printf '%s\n' '1234567890abcdef1234567890abcdef12345678' > "$work/artifact/CHECKOUT_SHA.txt"
-(cd "$work/artifact" && shasum -a 256 PicPaste-macOS27-arm64-unsigned.zip > SHA256SUMS)
+(cd "$work/artifact" && shasum -a 256 PicPaste-macOS27-arm64-adhoc.zip > SHA256SUMS)
 cat > "$work/bin/sw_vers" <<'MOCK'
 #!/bin/sh
 case "$1" in
@@ -45,11 +45,12 @@ grep -Fq '1234567890abcdef1234567890abcdef12345678' "$work/report.md"
 grep -Fq '27.0.1 (26A434)' "$work/report.md"
 grep -Fq 'Apple M3 Pro' "$work/report.md"
 grep -Fq 'SHA256: PASS' "$work/report.md"
+grep -Fq 'PicPaste-macOS27-arm64-adhoc.zip SHA256:' "$work/report.md"
 grep -Fq 'Resolution: 3024 x 1964 Retina' "$work/report.md"
 grep -Fq '尚未真机验证' "$work/report.md"
 if grep -q 'SECRET-SERIAL-DO-NOT-LEAK' "$work/report.md"; then echo 'Privacy leak' >&2; exit 1; fi
 if grep -q 'DEVICE_VERIFIED=YES' "$work/report.md"; then echo 'False verification state' >&2; exit 1; fi
-printf 'corrupted archive\n' >> "$work/artifact/PicPaste-macOS27-arm64-unsigned.zip"
+printf 'corrupted archive\n' >> "$work/artifact/PicPaste-macOS27-arm64-adhoc.zip"
 if PATH="$work/bin:$PATH" bash "$script" "$work/artifact" > "$work/invalid.md" 2> "$work/error.txt"; then
   echo 'Checksum mismatch incorrectly accepted' >&2; exit 1
 fi
@@ -59,4 +60,12 @@ if PATH="$work/bin:$PATH" bash "$script" "$work/artifact" > "$work/missing.md" 2
   echo 'Missing SOURCE_SHA incorrectly accepted' >&2; exit 1
 fi
 grep -Fq 'SOURCE_SHA.txt' "$work/error.txt"
+# Existing users may still hold the earlier unsigned artifact: allow the
+# evidence collector to verify it (but never imply the app is signed).
+rm -f "$work/artifact/PicPaste-macOS27-arm64-adhoc.zip"
+printf 'older synthetic unsigned app archive\n' > "$work/artifact/PicPaste-macOS27-arm64-unsigned.zip"
+printf '%s\n' '1234567890abcdef1234567890abcdef12345678' > "$work/artifact/SOURCE_SHA.txt"
+(cd "$work/artifact" && shasum -a 256 PicPaste-macOS27-arm64-unsigned.zip > SHA256SUMS)
+PATH="$work/bin:$PATH" bash "$script" "$work/artifact" > "$work/legacy.md"
+grep -Fq 'PicPaste-macOS27-arm64-unsigned.zip SHA256:' "$work/legacy.md"
 echo 'P0 acceptance evidence tests passed'
