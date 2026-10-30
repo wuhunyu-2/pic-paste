@@ -27,6 +27,10 @@ jobs:
       - name: Probe AppKit desktop session (informational, non-gating)
         continue-on-error: true
         run: xcrun swift scripts/tests/macos_desktop_session_probe.swift
+      - name: Probe one-shot ScreenCaptureKit (informational, no pixels saved)
+        continue-on-error: true
+        timeout-minutes: 3
+        run: xcrun swift scripts/tests/macos_capture_session_probe.swift
       - name: Build and test
         run: |
           xcodebuild -project PicPaste.xcodeproj -scheme PicPaste -destination 'platform=macOS,arch=arm64' -resultBundlePath "$RUNNER_TEMP/PicPasteTests.xcresult" CODE_SIGNING_ALLOWED=NO test
