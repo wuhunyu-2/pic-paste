@@ -62,3 +62,9 @@ bash scripts/collect-p0-evidence.sh /path/to/extracted-artifact > p0-07-device-e
 生成的 Markdown **默认所有操作均为“未执行”**。人工运行开发 App 后，逐行将结果填写为 PASS / FAIL / BLOCKED，补充截图/录屏、外接显示器排列与缩放、测试实际步骤和失败 Issue；再将已填写的报告附到 #7。即使本脚本成功，`DEVICE_VERIFIED` 仍为 NO。脚本的 GitHub Actions 测试只使用合成输入，不能当作物理设备验证。
 
 P0 验收最终是否通过，仍依照第 3 节完整真机矩阵和 Issue #7 人工证据决定。
+
+## 7. GitHub-hosted macOS 的桌面窗口探针
+
+CI 在 `xcode-27` 环境执行 `xcrun swift scripts/tests/macos_desktop_session_probe.swift`，尝试创建、显示和关闭一块 AppKit `NSPanel`，并打印当前虚拟显示器数量、Screen Recording 与 Accessibility 的既有授权状态。首次引入时设置 `continue-on-error: true`，因为它是对 runner 是否存在可用 WindowServer 图形会话的**探测**，不应在能力确认前直接阻断已有测试。`CI_DESKTOP_PROBE_RESULT=PASS` 只能证明 CI 会话可以进行基础 AppKit 窗口生命周期操作；`UNAVAILABLE` 或脚本失败则意味着需要确认运行环境，不代表 App 功能故障。
+
+下一步可在此基础上添加针对 PicPaste 自身 `SelectionPanelController` 的 AppKit 生命周期测试，并逐步覆盖非真实权限相关的自动化交互。ScreenCaptureKit 首次 TCC 授权、真实多显示器负坐标与物理显示器连接、Spaces/全屏、用户级焦点恢复及系统应用粘贴，仍需对照第 3 节的真实设备证据验收。禁止将 CI 的虚拟面板显示结果替换 `DEVICE_VERIFIED`。
