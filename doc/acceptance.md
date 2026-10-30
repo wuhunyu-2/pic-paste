@@ -47,3 +47,18 @@ Issue 不得因为 `CI_PASSED` 自动跳过 `DEVICE_VERIFIED`。最终状态记�
 ## 5. 关闭 Issue 的证据模板
 
 在对应 Issue 评论或 PR 中提供：准确功能和失败复现方式、commit SHA、CI run、开发 App artifact、设备环境与真实操作步骤、通过/失败和剩余风险。没有设备可测试时可完成代码 PR，但将设备验收 Issue 保持 Open。
+
+
+## 6. P0-07 本地采证脚本（辅助工具，不代替真机验收）
+
+针对 GitHub Actions 产出的 `PicPaste-macOS27-arm64-unsigned` artifact，在 macOS 27 真机上下载并解压 artifact 外层 ZIP（其中应有 `SOURCE_SHA.txt`、`CHECKOUT_SHA.txt`、`SHA256SUMS` 和 `PicPaste-macOS27-arm64-unsigned.zip`），从项目根目录执行：
+
+```bash
+bash scripts/collect-p0-evidence.sh /path/to/extracted-artifact > p0-07-device-evidence.md
+```
+
+脚本在本机校验 **App ZIP 的 SHA256 与同一 artifact 内的 SHA256SUMS 是否一致**，并记录源码 SHA、实际 checkout SHA、macOS 版本与精确 build、设备型号、架构、芯片信息以及经过白名单过滤的显示器分辨率摘要；不会把显示器序列号或原始系统报告放入结果，也不会上传任何数据。SHA256 不匹配、缺失必需来源文件时直接失败。
+
+生成的 Markdown **默认所有操作均为“未执行”**。人工运行开发 App 后，逐行将结果填写为 PASS / FAIL / BLOCKED，补充截图/录屏、外接显示器排列与缩放、测试实际步骤和失败 Issue；再将已填写的报告附到 #7。即使本脚本成功，`DEVICE_VERIFIED` 仍为 NO。脚本的 GitHub Actions 测试只使用合成输入，不能当作物理设备验证。
+
+P0 验收最终是否通过，仍依照第 3 节完整真机矩阵和 Issue #7 人工证据决定。
