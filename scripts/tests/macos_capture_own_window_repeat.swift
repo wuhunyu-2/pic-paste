@@ -16,6 +16,11 @@ private enum CaptureWindowTestFailure: Error {
     case unexpectedAuthorizationCallbackCount
     case preCancelledCaptureSucceeded
     case unexpectedCancellationResult
+    case cancelledStressAttemptSucceeded
+    case cancelledStressAttemptDidNotNormalize
+    case coordinatorRecoveryFailed
+    case memorySampleUnavailable
+    case memoryGrowthExceeded
 }
 
 private struct RGB {
@@ -132,7 +137,50 @@ struct CaptureOwnWindowProbe {
         // The production service must find/exclude this process' visible
         // window while the same real overlay is on screen.
         let service = CaptureService()
-        for iteration in 0..<8 {
+        let coordinator = CaptureCoordinator()
+        var successfulCaptures = 0
+        var cancelledRecoveries = 0
+        var warmedRSSKiB: Int?
+        var peakRSSKiB = 0
+
+        for iteration in 0..<30 {
+            // Every tenth iteration starts with an intentionally cancelled
+            // *real CaptureService request*. The public error and the
+            // coordinator must recover before the next actual screenshot.
+            if iteration % 10 == 9 {
+                guard coordinator.beginCaptureRequest() else {
+                    throw CaptureWindowTestFailure.coordinatorRecoveryFailed
+                }
+                let failedID = coordinator.generation
+                var ignoredAuthorizationCallbacks = 0
+                let cancelledTask = Task { @MainActor () throws -> CapturedFrame in
+                    withUnsafeCurrentTask { $0?.cancel() }
+                    return try await service.captureMouseDisplay {
+                        ignoredAuthorizationCallbacks += 1
+                    }
+                }
+                do {
+                    _ = try await cancelledTask.value
+                    throw CaptureWindowTestFailure.cancelledStressAttemptSucceeded
+                } catch let failure as CaptureFailure {
+                    guard failure == .cancelled else {
+                        throw CaptureWindowTestFailure.cancelledStressAttemptDidNotNormalize
+                    }
+                } catch {
+                    throw CaptureWindowTestFailure.cancelledStressAttemptDidNotNormalize
+                }
+                guard ignoredAuthorizationCallbacks == 0,
+                      coordinator.recordFailure(for: failedID),
+                      coordinator.phase == .idle else {
+                    throw CaptureWindowTestFailure.coordinatorRecoveryFailed
+                }
+                cancelledRecoveries += 1
+            }
+
+            guard coordinator.beginCaptureRequest() else {
+                throw CaptureWindowTestFailure.coordinatorRecoveryFailed
+            }
+            let requestID = coordinator.generation
             var callbackCount = 0
             let captured = try await service.captureMouseDisplay {
                 callbackCount += 1
@@ -152,11 +200,64 @@ struct CaptureOwnWindowProbe {
             )).isMagentaMarker else {
                 throw CaptureWindowTestFailure.screenshotContainsOwnWindow
             }
-            // No pixel data is logged, uploaded or written to a file.
+            guard coordinator.recordCapturedFrame(for: requestID),
+                  coordinator.phase == .showingFrozenFrame else {
+                throw CaptureWindowTestFailure.coordinatorRecoveryFailed
+            }
+            coordinator.finishCaptureRequest()
+            guard coordinator.phase == .idle else {
+                throw CaptureWindowTestFailure.coordinatorRecoveryFailed
+            }
+            successfulCaptures += 1
+            // Do not retain any CGImage samples across the loop.
             if iteration == 0 { print("CI_OWN_WINDOW_EXCLUSION=PASS") }
+
+            if iteration == 2 {
+                warmedRSSKiB = try residentRSSKiB()
+                peakRSSKiB = warmedRSSKiB!
+            }
+            if iteration >= 3 && (iteration % 5 == 4 || iteration == 29) {
+                peakRSSKiB = max(peakRSSKiB, try residentRSSKiB())
+            }
         }
-        print("CI_REPEATED_REAL_CAPTURES=8")
+
+        guard successfulCaptures == 30, cancelledRecoveries == 3,
+              let baseline = warmedRSSKiB else {
+            throw CaptureWindowTestFailure.coordinatorRecoveryFailed
+        }
+        let growthKiB = max(0, peakRSSKiB - baseline)
+        // A CI smoke bound, not a claim of leak-free long-running operation.
+        let maximumGrowthKiB = 256 * 1024
+        print("CI_REPEATED_REAL_CAPTURES=\(successfulCaptures)")
+        print("CI_REPEATED_REAL_CAPTURE_RECOVERIES=\(cancelledRecoveries)")
+        print("CI_CAPTURE_RSS_BASELINE_KIB=\(baseline)")
+        print("CI_CAPTURE_RSS_PEAK_GROWTH_KIB=\(growthKiB)")
+        print("CI_CAPTURE_RSS_GROWTH_LIMIT_KIB=\(maximumGrowthKiB)")
+        guard growthKiB <= maximumGrowthKiB else {
+            throw CaptureWindowTestFailure.memoryGrowthExceeded
+        }
+        print("CI_CAPTURE_RSS_BOUND_RESULT=PASS")
         print("CI_REPEATED_REAL_CAPTURES_RESULT=PASS")
+    }
+
+    private static func residentRSSKiB() throws -> Int {
+        // Resident set from the current test process, no elevated privileges.
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/ps")
+        process.arguments = ["-o", "rss=", "-p", String(getpid())]
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = Pipe()
+        try process.run()
+        let bytes = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0,
+              let text = String(data: bytes, encoding: .utf8),
+              let value = Int(text.trimmingCharacters(in: .whitespacesAndNewlines)),
+              value > 0 else {
+            throw CaptureWindowTestFailure.memorySampleUnavailable
+        }
+        return value
     }
 
     private static func pixelColor(
