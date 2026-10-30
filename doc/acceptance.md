@@ -118,3 +118,9 @@ CI 在 `xcode-27` 环境执行 `xcrun swift scripts/tests/macos_desktop_session_
 随后保持窗口可见，重复 **8 次**调用生产 `CaptureService.captureMouseDisplay`，逐次核验：截图授权完成回调恰好一次、显示器标识/原生屏幕坐标与尺寸一致、捕获 `CGImage` 的宽高合法，并确认窗口中心采样像素中**不再出现阳性对照的洋红色标记**。这项检查直接测试生产服务的 ScreenCaptureKit 排除策略，而不是单独构造一个模拟过滤器。测试返回时关闭窗口，图像仅在内存中作必要的局部像素判断，不写入磁盘、不上传到 CI Artifact、不输出任何截屏像素值。CI 为强制门槛（无 `continue-on-error`）；日志以 `CI_OWN_WINDOW_POSITIVE_CONTROL=PASS`、`CI_OWN_WINDOW_EXCLUSION=PASS`、`CI_REPEATED_REAL_CAPTURES=8` 和 `CI_OWN_WINDOW_REPEAT_RESULT=PASS` 为成功证据。
 
 **限制**：测试窗仅覆盖采样位置，用于证明在托管 macOS runner 上自身窗口排除的一个实际案例，并不证明任意位置、所有窗口类型或跨 Spaces 都完全排除。8 次连续真实捕获也不等于第 3 节要求的至少 30 次真实设备键鼠截图、取消和再捕获压力验收；真实多屏、用户首次 TCC、应用焦点及原生粘贴仍需实机证据，`DEVICE_VERIFIED` 仍取决于 Issue #7 的真机记录。
+
+## 13. 预先取消截图的错误归一化与重试
+
+P0-32 回归验证使用独立的 macOS CI 进程，在 Screen Recording 已被预授权的情况下，先创建一个进入 `CaptureService.captureMouseDisplay` 前**主动标记取消**的 Swift `Task`。断言服务抛出公共类型 `CaptureFailure.cancelled`，且尚未开始真正截图的任务不调用 `onAuthorizationComplete`；否则强制 CI 失败。随后同一个测试脚本继续调用真实 `CaptureService` 获取画面，作为失败后可以重新截图的基本证据。修复前 CI 已重现：`Task.checkCancellation()` 在内部异常转换范围外，原生 `CancellationError` 逸出；通过将检查纳入既有 `do/catch` 归一化，不绕过 TCC。
+
+这只覆盖**事先取消**与后续成功的单进程 CI 路径，不等同于首次 TCC 授权弹窗期间取消、用户桌面中途取消、跨 Space 取消或异常系统失败重试。相关真实设备结果继续按第 3 节收集。

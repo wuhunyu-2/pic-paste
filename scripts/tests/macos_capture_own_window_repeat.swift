@@ -14,6 +14,8 @@ private enum CaptureWindowTestFailure: Error {
     case screenshotContainsOwnWindow
     case invalidGeometry
     case unexpectedAuthorizationCallbackCount
+    case preCancelledCaptureSucceeded
+    case unexpectedCancellationResult
 }
 
 private struct RGB {
@@ -79,6 +81,31 @@ struct CaptureOwnWindowProbe {
         window.makeKeyAndOrderFront(nil)
         RunLoop.current.run(until: Date().addingTimeInterval(0.25))
         guard window.isVisible else { throw CaptureWindowTestFailure.invisibleTestWindow }
+
+        // A request cancelled before its first suspension must produce the
+        // public CaptureFailure.cancelled rather than a raw CancellationError.
+        // This is an actual CaptureService failure, followed by real capture retry.
+        var cancelledAuthorizationCallbacks = 0
+        let cancelledTask = Task { @MainActor () throws -> CapturedFrame in
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await CaptureService().captureMouseDisplay {
+                cancelledAuthorizationCallbacks += 1
+            }
+        }
+        do {
+            _ = try await cancelledTask.value
+            throw CaptureWindowTestFailure.preCancelledCaptureSucceeded
+        } catch let failure as CaptureFailure {
+            guard failure == .cancelled else {
+                throw CaptureWindowTestFailure.unexpectedCancellationResult
+            }
+        } catch {
+            throw CaptureWindowTestFailure.unexpectedCancellationResult
+        }
+        guard cancelledAuthorizationCallbacks == 0 else {
+            throw CaptureWindowTestFailure.unexpectedAuthorizationCallbackCount
+        }
+        print("CI_PRE_CANCELLED_CAPTURE=PASS")
 
         // Positive control: verify the unfiltered ScreenCaptureKit frame
         // contains our synthetic magenta window. Otherwise "excluded" would
