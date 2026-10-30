@@ -109,3 +109,12 @@ CI 在 `xcode-27` 环境执行 `xcrun swift scripts/tests/macos_desktop_session_
 日志分别打印 `CI_PICPaste_E2E_CAPTURE=PASS`、`CI_PICPaste_E2E_SELECTION=PASS`、`CI_PICPaste_E2E_PNG=PASS`、`CI_PICPaste_E2E_PASTEBOARD=PASS`，最后必须有 `CI_PICPaste_E2E_RESULT=PASS` 和同一来源 SHA 的 GitHub Actions 成功记录。
 
 **能力边界**：CI 是虚拟 macOS 图形会话；鼠标、Enter 为代码直接投递给生产视图的合成 NSEvent，未验证真实外设输入、系统级事件派发、首个 TCC 弹窗与拒绝/撤销/恢复、真实双屏、全屏 Spaces、用户焦点与 Preview/Notes 跨应用粘贴。不能因为该 CI 步骤成功而关闭 Issue #7 或标记 `DEVICE_VERIFIED`。最终真机验收仍遵守第 3 节。
+
+
+## 12. CI 自身窗口排除阳性对照和连续真实捕获
+
+`scripts/tests/macos_capture_own_window_repeat.swift` 在 `xcode-27` 托管 macOS 图形会话中，以**当前截图进程自身**创建可见、纯洋红色的原生 `NSWindow`。首先用未过滤的 `SCScreenshotManager.captureImage` 获取阳性对照，验证该窗口确实出现在画面内；若看不到窗口，该测试**失败**，不能用虚假的“未污染”结果冒充成功。
+
+随后保持窗口可见，重复 **8 次**调用生产 `CaptureService.captureMouseDisplay`，逐次核验：截图授权完成回调恰好一次、显示器标识/原生屏幕坐标与尺寸一致、捕获 `CGImage` 的宽高合法，并确认窗口中心采样像素中**不再出现阳性对照的洋红色标记**。这项检查直接测试生产服务的 ScreenCaptureKit 排除策略，而不是单独构造一个模拟过滤器。测试返回时关闭窗口，图像仅在内存中作必要的局部像素判断，不写入磁盘、不上传到 CI Artifact、不输出任何截屏像素值。CI 为强制门槛（无 `continue-on-error`）；日志以 `CI_OWN_WINDOW_POSITIVE_CONTROL=PASS`、`CI_OWN_WINDOW_EXCLUSION=PASS`、`CI_REPEATED_REAL_CAPTURES=8` 和 `CI_OWN_WINDOW_REPEAT_RESULT=PASS` 为成功证据。
+
+**限制**：测试窗仅覆盖采样位置，用于证明在托管 macOS runner 上自身窗口排除的一个实际案例，并不证明任意位置、所有窗口类型或跨 Spaces 都完全排除。8 次连续真实捕获也不等于第 3 节要求的至少 30 次真实设备键鼠截图、取消和再捕获压力验收；真实多屏、用户首次 TCC、应用焦点及原生粘贴仍需实机证据，`DEVICE_VERIFIED` 仍取决于 Issue #7 的真机记录。
