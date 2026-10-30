@@ -56,7 +56,7 @@ cat <<REPORT
 
 - SOURCE_SHA: \`$source_sha\`
 - CHECKOUT_SHA: \`$checkout_sha\`
-- PicPaste-macOS27-arm64-unsigned.zip SHA256: \`$actual_sha\`
+- $app_zip SHA256: \`$actual_sha\`
 - SHA256: PASS（所选开发 App ZIP 与产物内 SHA256SUMS 一致）
 
 ## 当前设备环境
