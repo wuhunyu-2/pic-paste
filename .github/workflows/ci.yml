@@ -25,6 +25,11 @@ jobs:
       - name: Build and test
         run: |
           xcodebuild -project PicPaste.xcodeproj -scheme PicPaste -destination 'platform=macOS,arch=arm64' -resultBundlePath "$RUNNER_TEMP/PicPasteTests.xcresult" CODE_SIGNING_ALLOWED=NO test
+      - name: Print XCTest failure diagnostics
+        if: failure()
+        run: |
+          xcrun xcresulttool get test-results tests --path "$RUNNER_TEMP/PicPasteTests.xcresult" --format json || true
+          xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/PicPasteTests.xcresult" --format json || true
       - name: Upload XCTest result bundle
         if: always()
         uses: actions/upload-artifact@v4
