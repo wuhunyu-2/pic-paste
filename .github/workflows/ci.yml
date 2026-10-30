@@ -115,6 +115,21 @@ jobs:
           test "$(plutil -extract LSMinimumSystemVersion raw -o - "$VERIFIED_APP/Contents/Info.plist")" = 27.0
           echo 'CI_ADHOC_APP_ZIP_ROUNDTRIP=PASS'
           echo 'CI_RELEASE_BUNDLE_SIGNATURE=PASS'
+          # Smoke-launch the executable from the *unpacked* downloadable ZIP.
+          # This checks more than a file hash/signature but does not simulate
+          # Gatekeeper quarantine or a real-user macOS desktop install.
+          "$VERIFIED_APP/Contents/MacOS/PicPaste" > "$RUNNER_TEMP/picpaste-adhoc-launch.log" 2>&1 &
+          APP_PID=$!
+          sleep 3
+          if ! kill -0 "$APP_PID" 2>/dev/null; then
+            cat "$RUNNER_TEMP/picpaste-adhoc-launch.log"
+            wait "$APP_PID" || true
+            echo 'CI_ADHOC_APP_LAUNCH=FAIL'
+            exit 1
+          fi
+          kill "$APP_PID"
+          wait "$APP_PID" || true
+          echo 'CI_ADHOC_APP_LAUNCH=PASS'
       - uses: actions/upload-artifact@v4
         with:
           name: PicPaste-macOS27-arm64-adhoc
