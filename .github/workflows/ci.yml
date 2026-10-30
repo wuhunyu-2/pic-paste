@@ -21,9 +21,22 @@ jobs:
           echo "SOURCE_SHA=$SOURCE_SHA"
           echo "CHECKOUT_SHA=$(git rev-parse HEAD)"
           uname -m
+          system_profiler SPDisplaysDataType | head -n 60
       - name: Build and test
         run: |
-          xcodebuild -project PicPaste.xcodeproj -scheme PicPaste -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO test
+          xcodebuild -project PicPaste.xcodeproj -scheme PicPaste -destination 'platform=macOS,arch=arm64' -resultBundlePath "$RUNNER_TEMP/PicPasteTests.xcresult" CODE_SIGNING_ALLOWED=NO test
+      - name: Print XCTest failure diagnostics
+        if: failure()
+        run: |
+          xcrun xcresulttool get test-results tests --path "$RUNNER_TEMP/PicPasteTests.xcresult" --format json || true
+          xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/PicPasteTests.xcresult" --format json || true
+      - name: Upload XCTest result bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PicPaste-XCTest-results
+          path: ${{ runner.temp }}/PicPasteTests.xcresult
+          if-no-files-found: warn
       - name: Build unsigned development app
         run: |
           xcodebuild -project PicPaste.xcodeproj -scheme PicPaste -configuration Release -destination 'platform=macOS,arch=arm64' -derivedDataPath "$RUNNER_TEMP/PicPasteDerived" CODE_SIGNING_ALLOWED=NO build
