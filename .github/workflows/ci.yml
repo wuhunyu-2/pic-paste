@@ -82,21 +82,41 @@ jobs:
           name: PicPaste-XCTest-results
           path: ${{ runner.temp }}/PicPasteTests.xcresult
           if-no-files-found: warn
-      - name: Build unsigned development app
+      - name: Build and verify ad-hoc signed development app
         run: |
+          set -euo pipefail
           xcodebuild -project PicPaste.xcodeproj -scheme PicPaste -configuration Release -destination 'platform=macOS,arch=arm64' -derivedDataPath "$RUNNER_TEMP/PicPasteDerived" CODE_SIGNING_ALLOWED=NO build
           APP="$RUNNER_TEMP/PicPasteDerived/Build/Products/Release/PicPaste.app"
           test -d "$APP"
-          # The downloadable app must have a valid signature; a ZIP checksum
-          # alone cannot prove macOS can validate the extracted application.
+          test -x "$APP/Contents/MacOS/PicPaste"
+          # CODE_SIGNING_ALLOWED=NO leaves an invalid/missing bundle resource seal.
+          # Re-sign the completed .app with a local ad-hoc identity.
+          # This is NOT a Developer ID signature and is NOT notarized.
+          codesign --force --sign - --timestamp=none "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP"
+          test "$(lipo -archs "$APP/Contents/MacOS/PicPaste")" = arm64
+          test "$(plutil -extract CFBundleIdentifier raw -o - "$APP/Contents/Info.plist")" = com.wuhunyu.picpaste
+          test "$(plutil -extract LSMinimumSystemVersion raw -o - "$APP/Contents/Info.plist")" = 27.0
           mkdir -p dist
           printf '%s\n' "$SOURCE_SHA" > dist/SOURCE_SHA.txt
           git rev-parse HEAD > dist/CHECKOUT_SHA.txt
-          ditto -c -k --keepParent "$APP" dist/PicPaste-macOS27-arm64-unsigned.zip
-          (cd dist && shasum -a 256 PicPaste-macOS27-arm64-unsigned.zip | tee SHA256SUMS && shasum -a 256 -c SHA256SUMS)
+          printf 'Ad-hoc signed developer preview; NOT Developer ID signed or Apple notarized.\n' > dist/SIGNING_MODE.txt
+          ditto -c -k --keepParent "$APP" dist/PicPaste-macOS27-arm64-adhoc.zip
+          (cd dist && shasum -a 256 PicPaste-macOS27-arm64-adhoc.zip | tee SHA256SUMS && shasum -a 256 -c SHA256SUMS)
+          # Signing must survive ZIP distribution, not just work in DerivedData.
+          EXTRACTED="$RUNNER_TEMP/picpaste-release-extracted"
+          mkdir -p "$EXTRACTED"
+          ditto -x -k dist/PicPaste-macOS27-arm64-adhoc.zip "$EXTRACTED"
+          VERIFIED_APP="$EXTRACTED/PicPaste.app"
+          test -x "$VERIFIED_APP/Contents/MacOS/PicPaste"
+          codesign --verify --deep --strict --verbose=2 "$VERIFIED_APP"
+          test "$(lipo -archs "$VERIFIED_APP/Contents/MacOS/PicPaste")" = arm64
+          test "$(plutil -extract CFBundleIdentifier raw -o - "$VERIFIED_APP/Contents/Info.plist")" = com.wuhunyu.picpaste
+          test "$(plutil -extract LSMinimumSystemVersion raw -o - "$VERIFIED_APP/Contents/Info.plist")" = 27.0
+          echo 'CI_ADHOC_APP_ZIP_ROUNDTRIP=PASS'
+          echo 'CI_RELEASE_BUNDLE_SIGNATURE=PASS'
       - uses: actions/upload-artifact@v4
         with:
-          name: PicPaste-macOS27-arm64-unsigned
+          name: PicPaste-macOS27-arm64-adhoc
           path: dist/
           if-no-files-found: error
