@@ -2,13 +2,13 @@ import AppKit
 
 @MainActor
 final class SelectionView: NSView {
-    private let frame: CapturedFrame
+    private let capturedFrame: CapturedFrame
     private var interaction = SelectionInteraction()
     var onComplete: ((PixelRect?) -> Void)?
     private var completed = false
 
     init(frame: CapturedFrame) {
-        self.frame = frame
+        self.capturedFrame = frame
         super.init(frame: CGRect(origin: .zero, size: frame.geometry.desktopFramePoints.size))
     }
 
@@ -18,13 +18,13 @@ final class SelectionView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         guard let context = NSGraphicsContext.current?.cgContext else { return }
-        context.draw(frame.image, in: bounds)
+        context.draw(capturedFrame.image, in: bounds)
         context.setFillColor(NSColor.black.withAlphaComponent(0.35).cgColor)
         context.fill(bounds)
         if let selected = interaction.selection {
             context.saveGState()
             context.clip(to: selected)
-            context.draw(frame.image, in: bounds)
+            context.draw(capturedFrame.image, in: bounds)
             context.restoreGState()
             context.setStrokeColor(NSColor.systemBlue.cgColor)
             context.setLineWidth(2)
@@ -63,7 +63,7 @@ final class SelectionView: NSView {
         switch event.keyCode {
         case 53: complete(nil)
         case 36, 76:
-            if let pixelRect = interaction.confirm(display: frame.geometry) { complete(pixelRect) }
+            if let pixelRect = interaction.confirm(display: capturedFrame.geometry) { complete(pixelRect) }
         default: super.keyDown(with: event)
         }
     }
