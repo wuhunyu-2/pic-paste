@@ -10,9 +10,16 @@ usage() {
 artifact_dir="$1"
 [[ -d "$artifact_dir" ]] || { echo "Artifact directory not found: $artifact_dir" >&2; exit 2; }
 
-for name in SOURCE_SHA.txt CHECKOUT_SHA.txt SHA256SUMS PicPaste-macOS27-arm64-unsigned.zip; do
+for name in SOURCE_SHA.txt CHECKOUT_SHA.txt SHA256SUMS; do
   [[ -f "$artifact_dir/$name" ]] || { echo "Missing required artifact file: $name" >&2; exit 2; }
 done
+# Prefer the repaired ad-hoc bundle; retain compatibility for older evidence
+# archives so the collector can still diagnose the original broken build.
+app_zip=''
+for candidate in PicPaste-macOS27-arm64-adhoc.zip PicPaste-macOS27-arm64-unsigned.zip; do
+  if [[ -f "$artifact_dir/$candidate" ]]; then app_zip="$candidate"; break; fi
+done
+[[ -n "$app_zip" ]] || { echo 'Missing required PicPaste app ZIP' >&2; exit 2; }
 source_sha="$(tr -d '\r\n' < "$artifact_dir/SOURCE_SHA.txt")"
 checkout_sha="$(tr -d '\r\n' < "$artifact_dir/CHECKOUT_SHA.txt")"
 for sha in "$source_sha" "$checkout_sha"; do
@@ -20,10 +27,10 @@ for sha in "$source_sha" "$checkout_sha"; do
 done
 
 # Check only our expected App zip; never accept a checksum manifest naming unrelated paths.
-expected_sha="$(awk '$2 == "PicPaste-macOS27-arm64-unsigned.zip" { print $1 }' "$artifact_dir/SHA256SUMS")"
+expected_sha="$(awk -v name="$app_zip" '$2 == name { print $1 }' "$artifact_dir/SHA256SUMS")"
 [[ "$expected_sha" =~ ^[0-9a-fA-F]{64}$ ]] || { echo 'Invalid or missing SHA256 checksum for app archive' >&2; exit 2; }
-actual_sha="$(shasum -a 256 "$artifact_dir/PicPaste-macOS27-arm64-unsigned.zip" | awk '{print $1}')"
-[[ "$expected_sha" == "$actual_sha" ]] || { echo 'SHA256 mismatch: PicPaste-macOS27-arm64-unsigned.zip' >&2; exit 1; }
+actual_sha="$(shasum -a 256 "$artifact_dir/$app_zip" | awk '{print $1}')"
+[[ "$expected_sha" == "$actual_sha" ]] || { echo "SHA256 mismatch: $app_zip" >&2; exit 1; }
 
 value_or_unknown() { "$@" 2>/dev/null || printf 'unknown\n'; }
 os_version="$(value_or_unknown sw_vers -productVersion)"
