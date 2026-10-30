@@ -68,3 +68,10 @@ P0 验收最终是否通过，仍依照第 3 节完整真机矩阵和 Issue #7 �
 CI 在 `xcode-27` 环境执行 `xcrun swift scripts/tests/macos_desktop_session_probe.swift`，尝试创建、显示和关闭一块 AppKit `NSPanel`，并打印当前虚拟显示器数量、Screen Recording 与 Accessibility 的既有授权状态。首次引入时设置 `continue-on-error: true`，因为它是对 runner 是否存在可用 WindowServer 图形会话的**探测**，不应在能力确认前直接阻断已有测试。`CI_DESKTOP_PROBE_RESULT=PASS` 只能证明 CI 会话可以进行基础 AppKit 窗口生命周期操作；`UNAVAILABLE` 或脚本失败则意味着需要确认运行环境，不代表 App 功能故障。
 
 在 `PicPasteTests.swift` 中基于合成 `CapturedFrame` 测试 PicPaste 自身 `SelectionPanelController` 的原生 `NSPanel` 显示、主动关闭、重复打开时旧窗口清理和取消回调幂等；这些 XCTest 可在 runner 的 WindowServer 会话上运行，但不需要真实屏幕捕获权限或硬件交互。下一步可进一步扩展事件注入及实际 ScreenCaptureKit 测试，并分别检查进程级 TCC 权限，而不是从独立 Swift 探针推断 App 授权。ScreenCaptureKit 首次 TCC 授权、真实多显示器负坐标与物理显示器连接、Spaces/全屏、用户级焦点恢复及系统应用粘贴，仍需对照第 3 节的真实设备证据验收。禁止将 CI 的虚拟面板显示结果替换 `DEVICE_VERIFIED`。
+
+
+## 8. CI ScreenCaptureKit 实际截图与隔离剪贴板测试
+
+`scripts/tests/macos_capture_session_probe.swift` 在 GitHub-hosted `xcode-27` 图形会话中先检查 **当前探针进程** 的 `CGPreflightScreenCaptureAccess()`，只有已授权才调用 `SCShareableContent`、`SCContentFilter` 和 `SCScreenshotManager.captureImage` 做单帧截图。结果仅打印屏幕 ID、图像宽高及 `CI_SCK_PROBE_RESULT`，**不会保存、上传或输出屏幕像素**；运行设置 `timeout-minutes: 3`，能力探测阶段使用 `continue-on-error: true`，日志中 `PASS` 才能视为真实捕获通过，单看 GitHub step 的绿色标记不够。宿主进程的 TCC 许可不能推断最终 App 在用户电脑上的授权流程。
+
+`PicPasteTests/PNGExportTests.swift` 使用独立命名的真实 `NSPasteboard` 做 PNG 字节复制、回读和 ImageIO 解码回归，不碰用户正在使用的 `NSPasteboard.general`。生产代码默认仍写入 `.general`，可选的 `to:` 参数只用于可隔离的依赖注入。这可以在 CI 检查本机写入和读回，但 **Preview/Notes 真实粘贴、首次许可、跨显示器、Space 和焦点恢复**仍按第 3 节交付真机证据；不能因为单帧与剪贴板 CI 成功就将 Issue #7 标为 `DEVICE_VERIFIED`。
