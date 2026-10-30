@@ -93,3 +93,19 @@ CI 在 `xcode-27` 环境执行 `xcrun swift scripts/tests/macos_desktop_session_
 - 分别操作八个选区调整手柄（上左、上、上右、右、下右、下、下左、左），断言完成回调仅一次、像素裁剪位置和尺寸正确、窗口清理完成。
 
 这些测试验证的是**生产 AppKit 视图及窗口的事件处理**，而非纯几何函数；但事件由 XCTest 构造并直接送入 NSResponder 方法，冻结图像为合成数据，并不模拟操作系统全局鼠标投递、物理光标焦点、首次 TCC、真实多显示器/Spaces 或 Preview/Notes 跨进程粘贴。不可据此把 P0-07 标记为 `DEVICE_VERIFIED`。实际鼠标与设备场景仍遵循第 3 节记录。
+
+
+## 11. CI 真正截图 → 原生选区 → PNG → 隔离剪贴板的端到端链路
+
+`.github/workflows/ci.yml` 通过 `xcrun swiftc` 编译 `scripts/tests/macos_live_capture_selection_export.swift`，直接链接仓库中的 **生产源码** `CaptureService`、`CaptureCoordinator`、`SelectionPanelController`、`SelectionView`、`SelectionInteraction`、`SelectionGeometry`、`ImageComposer`、`PNGExporter`、`ClipboardWriter` 及相关类型。该 CI 步骤为 **强制门槛**，不使用 `continue-on-error`。
+
+执行顺序：
+
+1. 检查运行该程序的 CI 进程已具备屏幕录制权限、鼠标位于可见显示器；由 `CaptureService.captureMouseDisplay` 真正调用 ScreenCaptureKit 冻结源 `CGImage`，检查捕获权限回调次数和截图像素尺寸。
+2. 通过实际 `CaptureCoordinator` 管理截图会话，再用真实 AppKit `NSPanel` / `SelectionView` 显示**先前已经捕获**的冻结画面；以合成 `NSEvent` 发送画面中央区域的 mouseDown / mouseDragged / mouseUp / Enter，检查选区完成一次、无残留可见浮层、状态返回 idle。
+3. 用与 `SelectionGeometry` 独立计算的按屏幕 points→图像 pixels 期望矩形，验证 y-up / y-down 映射和裁剪区域；使用生产 `ImageComposer` 和 `PNGExporter` 编码，再经 ImageIO 解码，断言像素尺寸与期望裁剪一致。
+4. 将同一份 PNG 数据写入**独立命名的真实** `NSPasteboard`，读回验证字节完全一致，退出前清空；无截图图片文件、图像二进制、像素值或粘贴内容上传到 Actions artifact 与日志。
+
+日志分别打印 `CI_PICPaste_E2E_CAPTURE=PASS`、`CI_PICPaste_E2E_SELECTION=PASS`、`CI_PICPaste_E2E_PNG=PASS`、`CI_PICPaste_E2E_PASTEBOARD=PASS`，最后必须有 `CI_PICPaste_E2E_RESULT=PASS` 和同一来源 SHA 的 GitHub Actions 成功记录。
+
+**能力边界**：CI 是虚拟 macOS 图形会话；鼠标、Enter 为代码直接投递给生产视图的合成 NSEvent，未验证真实外设输入、系统级事件派发、首个 TCC 弹窗与拒绝/撤销/恢复、真实双屏、全屏 Spaces、用户焦点与 Preview/Notes 跨应用粘贴。不能因为该 CI 步骤成功而关闭 Issue #7 或标记 `DEVICE_VERIFIED`。最终真机验收仍遵守第 3 节。
