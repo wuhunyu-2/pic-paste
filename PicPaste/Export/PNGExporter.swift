@@ -16,6 +16,18 @@ enum PNGExporter {
         return data as Data
     }
 
+    /// Create exactly the requested path, never replacing an existing file.
+    static func save(_ data: Data, to target: URL) throws {
+        let directory = target.deletingLastPathComponent()
+        let temp = directory.appendingPathComponent(".\(UUID().uuidString).tmp")
+        try data.write(to: temp, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: temp) }
+        guard link(temp.path, target.path) == 0 else {
+            if errno == EEXIST { throw CocoaError(.fileWriteFileExists) }
+            throw CocoaError(.fileWriteUnknown)
+        }
+    }
+
     static func save(_ data: Data, in directory: URL) throws -> URL {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         for _ in 0..<10 {
