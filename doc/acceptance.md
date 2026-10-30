@@ -75,3 +75,11 @@ CI 在 `xcode-27` 环境执行 `xcrun swift scripts/tests/macos_desktop_session_
 `scripts/tests/macos_capture_session_probe.swift` 在 GitHub-hosted `xcode-27` 图形会话中先检查 **当前探针进程** 的 `CGPreflightScreenCaptureAccess()`，只有已授权才调用 `SCShareableContent`、`SCContentFilter` 和 `SCScreenshotManager.captureImage` 做单帧截图。结果仅打印屏幕 ID、图像宽高及 `CI_SCK_PROBE_RESULT`，**不会保存、上传或输出屏幕像素**；运行设置 `timeout-minutes: 3`，能力探测阶段使用 `continue-on-error: true`，日志中 `PASS` 才能视为真实捕获通过，单看 GitHub step 的绿色标记不够。宿主进程的 TCC 许可不能推断最终 App 在用户电脑上的授权流程。
 
 `PicPasteTests/PNGExportTests.swift` 使用独立命名的真实 `NSPasteboard` 做 PNG 字节复制、回读和 ImageIO 解码回归，不碰用户正在使用的 `NSPasteboard.general`。生产代码默认仍写入 `.general`，可选的 `to:` 参数只用于可隔离的依赖注入。这可以在 CI 检查本机写入和读回，但 **Preview/Notes 真实粘贴、首次许可、跨显示器、Space 和焦点恢复**仍按第 3 节交付真机证据；不能因为单帧与剪贴板 CI 成功就将 Issue #7 标为 `DEVICE_VERIFIED`。
+
+## 9. CaptureService 源码实调、30 次选区循环和 Escape 自动化
+
+- `PicPasteTests.swift` 的 `testThirtySelectionSessionsReturnToIdleWithoutStaleOverlay` 用真实 `SelectionPanelController`、`SelectionView`、`CaptureCoordinator` 进行 30 次循环：每次模拟状态机的截图成功，创建 NSPanel，取消两次并校验仅回调一次、没有残留的可见选区窗口以及状态返回 `idle`。这属于 **合成冻结图像 + 真实 AppKit 窗口** 的自动化回归，不代表连续 30 次屏幕实际采集成功。
+- `testSyntheticEscapeKeyClosesRealSelectionPanelOnce` 构造 `NSEvent.keyDown`（Escape），直接发送到实际 `SelectionView.keyDown`，检查关闭与回调幂等；这不等于物理键盘或全局快捷键实际输入验证。
+- `testRealCaptureServiceOnAuthorizedDesktop` 尝试由实际 XCTest 宿主运行 `CaptureService.captureMouseDisplay`；若宿主进程未被 TCC 预授权或鼠标不在屏幕内，会以 **XCTSkip** 明确跳过。**跳过必须记录为未测试，不能计为成功。**
+- 为减少 XCTest 宿主 TCC 限制，CI 另用 `xcrun swiftc` 将仓库中的 **原始** `CaptureService.swift`、`CapturedFrame.swift`、`ScreenPermissionService.swift` 与 `scripts/tests/macos_capture_service_probe.swift` 编译为单独的探测程序。该程序只在其自身已获得屏幕录制预授权时调用 `captureMouseDisplay`，仅输出尺寸、displayID、错误类型与 `CI_APP_CAPTURE_SERVICE_RESULT`，不保存或上传图片。该生产源码实调已在 PR CI 输出过 `CI_APP_CAPTURE_SERVICE_RESULT=PASS`，随后升级为**强制 CI 门槛**（不设置 `continue-on-error`）：缺少权限、没有鼠标所在显示器、捕获失败或编译失败均导致该步骤失败。必须同时检查日志中的 `CI_APP_CAPTURE_SERVICE_RESULT=PASS` 和正确 SHA 的 Actions 结果，不能将独立探针成功推断为 XCTest 宿主的 TCC 通过。
+- 所有这些 CI 测试仍发生在托管的虚拟 macOS 图形会话中，不能替代第 3 节所要求的首次 TCC 授权/撤销、真实多屏、Spaces、物理焦点恢复和跨应用粘贴。只有真实环境证据可设置 `DEVICE_VERIFIED`。

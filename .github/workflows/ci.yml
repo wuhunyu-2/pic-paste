@@ -31,6 +31,15 @@ jobs:
         continue-on-error: true
         timeout-minutes: 3
         run: xcrun swift scripts/tests/macos_capture_session_probe.swift
+      - name: Verify real PicPaste CaptureService on hosted macOS
+        timeout-minutes: 3
+        run: |
+          xcrun swiftc -o "$RUNNER_TEMP/picpaste-capture-service-probe" \
+            scripts/tests/macos_capture_service_probe.swift \
+            PicPaste/Capture/CapturedFrame.swift \
+            PicPaste/Capture/ScreenPermissionService.swift \
+            PicPaste/Capture/CaptureService.swift
+          "$RUNNER_TEMP/picpaste-capture-service-probe"
       - name: Build and test
         run: |
           xcodebuild -project PicPaste.xcodeproj -scheme PicPaste -destination 'platform=macOS,arch=arm64' -resultBundlePath "$RUNNER_TEMP/PicPasteTests.xcresult" CODE_SIGNING_ALLOWED=NO test

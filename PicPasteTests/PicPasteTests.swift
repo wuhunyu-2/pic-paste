@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import ScreenCaptureKit
 import XCTest
 @testable import PicPaste
 
@@ -76,4 +77,85 @@ final class PicPasteTests: XCTestCase {
         XCTAssertFalse(secondPanel.isVisible)
         XCTAssertEqual(visibleSelectionPanels().count, 0)
     }
+    func testThirtySelectionSessionsReturnToIdleWithoutStaleOverlay() throws {
+        let coordinator = CaptureCoordinator()
+        let controller = SelectionPanelController()
+        defer { controller.dismiss() }
+        let fixture = try makeSelectionFixture()
+        var completionCount = 0
+
+        for index in 0..<30 {
+            XCTAssertTrue(coordinator.beginCaptureRequest(), "Iteration \(index): next capture should begin")
+            let request = coordinator.generation
+            XCTAssertTrue(coordinator.recordCapturedFrame(for: request))
+            XCTAssertFalse(coordinator.beginCaptureRequest(), "Iteration \(index): overlapping capture rejected")
+
+            controller.present(frame: fixture) { result in
+                XCTAssertNil(result)
+                completionCount += 1
+                coordinator.finishCaptureRequest()
+            }
+
+            let panel = try XCTUnwrap(visibleSelectionPanels().first)
+            XCTAssertEqual(visibleSelectionPanels().count, 1)
+            let view = try XCTUnwrap(panel.contentView as? SelectionView)
+            view.cancel()
+            view.cancel() // A second cancellation must not invoke completion twice.
+
+            XCTAssertFalse(panel.isVisible, "Iteration \(index): old panel still visible")
+            XCTAssertTrue(visibleSelectionPanels().isEmpty, "Iteration \(index): transparent overlay remains")
+            XCTAssertEqual(coordinator.phase, .idle)
+            XCTAssertEqual(completionCount, index + 1)
+        }
+    }
+
+    func testSyntheticEscapeKeyClosesRealSelectionPanelOnce() throws {
+        let controller = SelectionPanelController()
+        defer { controller.dismiss() }
+        var completionCount = 0
+        controller.present(frame: try makeSelectionFixture()) { selection in
+            XCTAssertNil(selection)
+            completionCount += 1
+        }
+        let panel = try XCTUnwrap(visibleSelectionPanels().first)
+        let view = try XCTUnwrap(panel.contentView as? SelectionView)
+        let escape = try XCTUnwrap(NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: panel.windowNumber, context: nil,
+            characters: "\u{1B}", charactersIgnoringModifiers: "\u{1B}",
+            isARepeat: false, keyCode: 53
+        ))
+
+        view.keyDown(with: escape)
+        view.cancel() // Validate idempotent completion after Escape.
+
+        XCTAssertEqual(completionCount, 1)
+        XCTAssertFalse(panel.isVisible)
+        XCTAssertTrue(visibleSelectionPanels().isEmpty)
+    }
+
+    func testRealCaptureServiceOnAuthorizedDesktop() async throws {
+        // The XCTest host has its own TCC identity. Do not trigger a permission
+        // prompt in unattended CI; explicitly report an untested environment.
+        guard CGPreflightScreenCaptureAccess() else {
+            throw XCTSkip("XCTest host lacks preauthorized Screen Recording permission")
+        }
+        guard NSScreen.screens.contains(where: { $0.frame.contains(NSEvent.mouseLocation) }) else {
+            throw XCTSkip("Hosted macOS has no display under the mouse pointer")
+        }
+
+        var authorizationCompletionCount = 0
+        let result = try await CaptureService().captureMouseDisplay {
+            authorizationCompletionCount += 1
+        }
+
+        XCTAssertEqual(authorizationCompletionCount, 1)
+        XCTAssertGreaterThan(result.image.width, 0)
+        XCTAssertGreaterThan(result.image.height, 0)
+        XCTAssertEqual(result.image.width, result.geometry.imageWidthPixels)
+        XCTAssertEqual(result.image.height, result.geometry.imageHeightPixels)
+        XCTAssertTrue(NSScreen.screens.contains(where: { $0.frame == result.geometry.desktopFramePoints }))
+        print("CI_CAPTURE_SERVICE_RESULT=PASS image=\(result.image.width)x\(result.image.height)")
+    }
+
 }
