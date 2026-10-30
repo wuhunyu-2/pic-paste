@@ -1,4 +1,5 @@
 import CoreGraphics
+import ImageIO
 import Foundation
 import XCTest
 @testable import PicPaste
@@ -12,6 +13,24 @@ final class PNGExportTests: XCTestCase {
             bytesPerRow: 16, space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
             provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent))
+    }
+
+    func testRoundedCornerHasTransparentAlpha() throws {
+        let output = try ImageComposer.compose(source: source(), crop: PixelRect(x: 0, y: 0, width: 4, height: 4), radius: 2)
+        let png = try PNGExporter.encode(output)
+        let decoded = try XCTUnwrap(CGImageSourceCreateWithData(png as CFData, nil))
+        let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(decoded, 0, nil))
+        XCTAssertEqual(image.width, 4)
+        XCTAssertEqual(image.height, 4)
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 4 * 4 * 4)
+        defer { buffer.deallocate() }
+        let context = try XCTUnwrap(CGContext(data: buffer, width: 4, height: 4, bitsPerComponent: 8,
+            bytesPerRow: 16, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.clear(CGRect(x: 0, y: 0, width: 4, height: 4))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: 4, height: 4))
+        XCTAssertEqual(buffer[3], 0, "Top/bottom corner must remain transparent")
+        XCTAssertGreaterThan(buffer[(1 * 4 + 1) * 4 + 3], 0, "Interior must not be transparent")
     }
 
     func testCropPreservesSourcePixelDimensions() throws {
