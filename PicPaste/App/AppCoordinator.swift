@@ -4,6 +4,7 @@ import AppKit
 final class AppCoordinator {
     private let capture = CaptureCoordinator()
     private let captureService = CaptureService()
+    private let selectionPanel = SelectionPanelController()
     private var captureTask: Task<Void, Never>?
     private var deadlineTask: Task<Void, Never>?
     private var activeRequestID: UInt64?
@@ -69,6 +70,7 @@ final class AppCoordinator {
     }
 
     func cancelCapture() {
+        selectionPanel.dismiss()
         captureTask?.cancel()
         deadlineTask?.cancel()
         captureTask = nil
@@ -78,21 +80,18 @@ final class AppCoordinator {
     }
 
     private func presentFrozenFrame(_ frame: CapturedFrame) {
-        presentingFeedback = true
-        defer {
-            presentingFeedback = false
-            capture.finishCaptureRequest()
+        selectionPanel.present(frame: frame) { [weak self] result in
+            guard let self else { return }
+            self.capture.finishCaptureRequest()
+            // PNG and clipboard export will be integrated by P0-06.
+            if let result {
+                let alert = NSAlert()
+                alert.messageText = "已确认选区"
+                alert.informativeText = "源图像素区域：\(result.x), \(result.y), \(result.width) × \(result.height)。复制与保存将在 P0-06 接入。"
+                NSApp.activate(ignoringOtherApps: true)
+                _ = alert.runModal()
+            }
         }
-
-        // P0-05 will display the frozen CGImage inside a real selection NSPanel.
-        // Until then, report metadata without writing or uploading the image.
-        let alert = NSAlert()
-        alert.messageText = "已捕获冻结图像"
-        alert.informativeText = "显示器 ID：\(frame.geometry.displayID)\n" +
-            "源图尺寸：\(frame.image.width) × \(frame.image.height) 像素\n" +
-            "原生选区将在 P0-05 接入。"
-        NSApp.activate(ignoringOtherApps: true)
-        _ = alert.runModal()
     }
 
     private func presentError(_ error: Error) {
