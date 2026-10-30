@@ -115,12 +115,20 @@ CI 在 `xcode-27` 环境执行 `xcrun swift scripts/tests/macos_desktop_session_
 
 `scripts/tests/macos_capture_own_window_repeat.swift` 在 `xcode-27` 托管 macOS 图形会话中，以**当前截图进程自身**创建可见、纯洋红色的原生 `NSWindow`。首先用未过滤的 `SCScreenshotManager.captureImage` 获取阳性对照，验证该窗口确实出现在画面内；若看不到窗口，该测试**失败**，不能用虚假的“未污染”结果冒充成功。
 
-随后保持窗口可见，重复 **8 次**调用生产 `CaptureService.captureMouseDisplay`，逐次核验：截图授权完成回调恰好一次、显示器标识/原生屏幕坐标与尺寸一致、捕获 `CGImage` 的宽高合法，并确认窗口中心采样像素中**不再出现阳性对照的洋红色标记**。这项检查直接测试生产服务的 ScreenCaptureKit 排除策略，而不是单独构造一个模拟过滤器。测试返回时关闭窗口，图像仅在内存中作必要的局部像素判断，不写入磁盘、不上传到 CI Artifact、不输出任何截屏像素值。CI 为强制门槛（无 `continue-on-error`）；日志以 `CI_OWN_WINDOW_POSITIVE_CONTROL=PASS`、`CI_OWN_WINDOW_EXCLUSION=PASS`、`CI_REPEATED_REAL_CAPTURES=8` 和 `CI_OWN_WINDOW_REPEAT_RESULT=PASS` 为成功证据。
+随后保持窗口可见，重复 **30 次**调用生产 `CaptureService.captureMouseDisplay`，逐次核验：截图授权完成回调恰好一次、显示器标识/原生屏幕坐标与尺寸一致、捕获 `CGImage` 的宽高合法，并确认窗口中心采样像素中**不再出现阳性对照的洋红色标记**。这项检查直接测试生产服务的 ScreenCaptureKit 排除策略，而不是单独构造一个模拟过滤器。测试返回时关闭窗口，图像仅在内存中作必要的局部像素判断，不写入磁盘、不上传到 CI Artifact、不输出任何截屏像素值。CI 为强制门槛（无 `continue-on-error`）；日志以 `CI_OWN_WINDOW_POSITIVE_CONTROL=PASS`、`CI_OWN_WINDOW_EXCLUSION=PASS`、`CI_REPEATED_REAL_CAPTURES=30` 和 `CI_OWN_WINDOW_REPEAT_RESULT=PASS` 为成功证据。
 
-**限制**：测试窗仅覆盖采样位置，用于证明在托管 macOS runner 上自身窗口排除的一个实际案例，并不证明任意位置、所有窗口类型或跨 Spaces 都完全排除。8 次连续真实捕获也不等于第 3 节要求的至少 30 次真实设备键鼠截图、取消和再捕获压力验收；真实多屏、用户首次 TCC、应用焦点及原生粘贴仍需实机证据，`DEVICE_VERIFIED` 仍取决于 Issue #7 的真机记录。
+**限制**：测试窗仅覆盖采样位置，用于证明在托管 macOS runner 上自身窗口排除的一个实际案例，并不证明任意位置、所有窗口类型或跨 Spaces 都完全排除。30 次 CI 虚拟屏幕连续真实捕获也不等于第 3 节要求的至少 30 次真实设备键鼠截图、取消和再捕获压力验收；真实多屏、用户首次 TCC、应用焦点及原生粘贴仍需实机证据，`DEVICE_VERIFIED` 仍取决于 Issue #7 的真机记录。
 
 ## 13. 预先取消截图的错误归一化与重试
 
 P0-32 回归验证使用独立的 macOS CI 进程，在 Screen Recording 已被预授权的情况下，先创建一个进入 `CaptureService.captureMouseDisplay` 前**主动标记取消**的 Swift `Task`。断言服务抛出公共类型 `CaptureFailure.cancelled`，且尚未开始真正截图的任务不调用 `onAuthorizationComplete`；否则强制 CI 失败。随后同一个测试脚本继续调用真实 `CaptureService` 获取画面，作为失败后可以重新截图的基本证据。修复前 CI 已重现：`Task.checkCancellation()` 在内部异常转换范围外，原生 `CancellationError` 逸出；通过将检查纳入既有 `do/catch` 归一化，不绕过 TCC。
 
 这只覆盖**事先取消**与后续成功的单进程 CI 路径，不等同于首次 TCC 授权弹窗期间取消、用户桌面中途取消、跨 Space 取消或异常系统失败重试。相关真实设备结果继续按第 3 节收集。
+
+## 14. 连续 30 次实际捕获、取消恢复和 RSS 内存边界
+
+同一 CI 脚本现在使用生产 `CaptureService.captureMouseDisplay` 在托管 macOS 的虚拟显示器上顺序获取 **30 帧真实 ScreenCaptureKit 截图**，每帧均核验尺寸、显示器信息、回调次数与测试进程自有窗口排除。每逢第 10 次请求前，先构造一个预先取消的真实 `CaptureService` 任务，断言收到 `CaptureFailure.cancelled`、无授权完成回调，并调用真实 `CaptureCoordinator.recordFailure` 恢复 `idle` 后成功发起下一张截图。最终必须得到 `CI_REPEATED_REAL_CAPTURES=30`、`CI_REPEATED_REAL_CAPTURE_RECOVERIES=3` 与 `CI_REPEATED_REAL_CAPTURES_RESULT=PASS`。
+
+通过 `/bin/ps -o rss=` 对**当前 CI 测试进程**采集 RSS（KiB）；在第 3 帧成功截图后建立预热基线，此后每隔约 5 帧测量峰值。若峰值相对于预热基线增长超过 **256 MiB**，CI 失败。日志记录 `CI_CAPTURE_RSS_BASELINE_KIB`、`CI_CAPTURE_RSS_PEAK_GROWTH_KIB`、`CI_CAPTURE_RSS_GROWTH_LIMIT_KIB=262144` 和 `CI_CAPTURE_RSS_BOUND_RESULT=PASS`。该短程宽松阈值是捕捉明显资源异常的**烟雾测试**，不等同于长期内存泄漏证明，也不测量独立 GPU 资源和长期任务句柄。所有截图仅在本机内存中处理，不上传像素。
+
+**验收边界**：真实像素采集发生在 GitHub 托管的**单个虚拟显示器**，预先取消通过代码发起，不是物理鼠标/键盘及用户权限弹窗交互；不能把这 30 帧视为第 3 节完整的 30 次真实设备截图交互验收。物理多屏、Spaces、系统 TCC、焦点和跨应用粘贴均需真实设备证据，`DEVICE_VERIFIED` 不因此改变。
